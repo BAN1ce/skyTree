@@ -6,7 +6,7 @@ import (
 	"github.com/BAN1ce/skyTree/pkg/proto"
 	"github.com/BAN1ce/skyTree/pkg/util"
 	proto2 "github.com/golang/protobuf/proto"
-	"github.com/lni/dragonboat/statemachine"
+	statemachine2 "github.com/lni/dragonboat/v3/statemachine"
 	"io"
 	"sync"
 )
@@ -16,6 +16,19 @@ type ClientID = string
 type CoreModel struct {
 	model *proto.CoreModel
 	mux   sync.RWMutex
+}
+
+func NewCoreModel() *CoreModel {
+	var (
+		model = &CoreModel{}
+	)
+	model.model = &proto.CoreModel{
+		Hash: &proto.HashSubTopic{
+			HashSubTopic: map[string]*proto.SubTopicClient{},
+		},
+		Client: map[string]*proto.ClientModel{},
+	}
+	return model
 }
 
 func (m *CoreModel) ReadOrStoreClient(model *proto.ClientModel) (old *proto.ClientModel, exists bool) {
@@ -90,7 +103,13 @@ func (m *CoreModel) ReadTopicSubscribers(topic string) ([]*proto.ClientModel, er
 	return m.getHashSubTopic(topic)
 }
 
-func (m *CoreModel) Update(bytes []byte) uint64 {
+func (m *CoreModel) GetHash() uint64 {
+	return 0
+}
+
+// -----------------------------State machine interface---------------------------//
+
+func (m *CoreModel) Update(bytes []byte) (statemachine2.Result, error) {
 	var (
 		command = DecodeCommand(bytes)
 	)
@@ -101,33 +120,31 @@ func (m *CoreModel) Update(bytes []byte) uint64 {
 	default:
 		logger.Logger.Error("unknown command type: ", command.commandType)
 	}
-	return 0
+	return statemachine2.Result{}, nil
+
 }
 
-func (m *CoreModel) Lookup(bytes []byte) []byte {
+func (m *CoreModel) Lookup(i interface{}) (interface{}, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *CoreModel) SaveSnapshot(writer io.Writer, collection statemachine.ISnapshotFileCollection, i <-chan struct{}) (uint64, error) {
+func (m *CoreModel) SaveSnapshot(writer io.Writer, collection statemachine2.ISnapshotFileCollection, i <-chan struct{}) error {
 	m.mux.RLock()
 	defer m.mux.RUnlock()
 
 	if data, err := proto2.Marshal(m.model); err != nil {
-		return 0, err
+		return err
 	} else {
-		l, err := writer.Write(data)
-		return uint64(l), err
+		_, err := writer.Write(data)
+		return err
 	}
 }
 
-func (m *CoreModel) RecoverFromSnapshot(reader io.Reader, files []statemachine.SnapshotFile, i <-chan struct{}) error {
+func (m *CoreModel) RecoverFromSnapshot(reader io.Reader, files []statemachine2.SnapshotFile, i <-chan struct{}) error {
 	return nil
 }
 
-func (m *CoreModel) Close() {
-}
-
-func (m *CoreModel) GetHash() uint64 {
-	return 0
+func (m *CoreModel) Close() error {
+	return nil
 }
