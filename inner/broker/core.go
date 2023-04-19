@@ -1,4 +1,4 @@
-package packet
+package broker
 
 /*
 | Control Packet Type | Value |
@@ -20,26 +20,38 @@ package packet
 | AUTH                | 15    |
 +---------------------+-------+
 */
-const (
-	CONNECT = 1 << iota
-	CONNACK
-	PUBLISH
-	PUBACK
-	PUBREC
-	PUBREL
-	PUBCOMP
-	SUBSCRIBE
-	SUBACK
-	UNSUBSCRIBE
-	UNSUBACK
-	PINGREQ
-	PINGRESP
-	DISCONNECT
-	AUTH
-)
 
-type FixedHeader struct {
-	ControlPacketType uint8
-	SpecificFlags     uint8
-	RemainingLength   uint8
+type Core struct {
+}
+
+func (c *Core) Connect() {
+	panic("implement me")
+}
+
+func (c *Core) Publish() {
+	panic("implement me")
+}
+
+func (c *Core) PubRec() {
+	panic("implement me")
+}
+
+func (c *Core) Subscribe() {
+	panic("implement me")
+}
+
+func (c *Core) Unsubscribe() {
+	panic("implement me")
+}
+
+func (c *Core) Ping() {
+	panic("implement me")
+}
+
+func (c *Core) Disconnect() {
+	panic("implement me")
+}
+
+func (c *Core) Auth() {
+	panic("implement me")
 }

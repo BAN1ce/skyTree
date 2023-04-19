@@ -1,4 +1,4 @@
-package store
+package meta
 
 import (
 	"github.com/BAN1ce/skyTree/logger"

@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 	"github.com/BAN1ce/skyTree/inner/cluster"
-	"github.com/BAN1ce/skyTree/inner/store"
+	"github.com/BAN1ce/skyTree/inner/store/meta"
 	"github.com/lni/dragonboat/v3/config"
 	"sync"
 )
@@ -40,7 +40,7 @@ func NewApp() *App {
 			1: "localhost:9526",
 		}),
 		// todo : should support config
-		cluster.WithStateMachine(store.NewCoreModel()),
+		cluster.WithStateMachine(meta.NewCoreModel()),
 	}...)
 	return app
 }
