@@ -9,3 +9,6 @@ Raft:
   OrderedConfigChange: true
   MaxInMemLogSize: 1048576
   SnapshotCompressionType: gzip
+
+Server:
+  ListenAddr: "tcp://127.0.0.1:9526"

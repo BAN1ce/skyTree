@@ -10,7 +10,9 @@ type Listener struct {
 }
 
 func NewListener(addr *net.TCPAddr) *Listener {
-	var listener = &Listener{}
+	var listener = &Listener{
+		addr: addr,
+	}
 	return listener
 
 }

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"github.com/BAN1ce/skyTree/inner/server/tcp"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/errs"
 	"net"
@@ -17,20 +18,26 @@ type Listener interface {
 	Name() string
 }
 
-type server struct {
+type Server struct {
 	listener []Listener
 	mux      sync.RWMutex
 	wg       sync.WaitGroup
+	conn     chan net.Conn
 	started  bool
 }
 
-func NewServer(listener []Listener) *server {
-	return &server{
+func NewTCPServer(addr *net.TCPAddr) *Server {
+	return NewServer([]Listener{tcp.NewListener(addr)})
+}
+
+func NewServer(listener []Listener) *Server {
+	return &Server{
 		listener: listener,
+		conn:     make(chan net.Conn),
 	}
 }
 
-func (s *server) Start() error {
+func (s *Server) Start() error {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 	if s.started {
@@ -46,6 +53,16 @@ func (s *server) Start() error {
 			if err := l.Listen(); err != nil {
 				logger.Logger.Fatalln("listen error = ", err.Error())
 			}
+			logger.Logger.Info("listen success = ", l.Name())
+			for {
+				if con, err := l.Accept(); err != nil {
+					logger.Logger.Error("accept error = ", err.Error())
+					return
+				} else {
+					logger.Logger.Debug("accept success = ", con.RemoteAddr().String())
+					s.conn <- con
+				}
+			}
 			logger.Logger.WithField("Listener", l.Name()).Info("listen close")
 		}(l)
 	}
@@ -53,7 +70,7 @@ func (s *server) Start() error {
 	return nil
 }
 
-func (s *server) Close() error {
+func (s *Server) Close() error {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 	if !s.started {
@@ -75,4 +92,10 @@ func (s *server) Close() error {
 	}
 	s.started = false
 	return nil
+}
+
+func (s *Server) Conn() (net.Conn, bool) {
+	// TODO: channel close panic
+	conn, ok := <-s.conn
+	return conn, ok
 }

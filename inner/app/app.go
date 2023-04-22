@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"github.com/BAN1ce/skyTree/inner/broker"
 	"github.com/BAN1ce/skyTree/inner/cluster"
 	"github.com/BAN1ce/skyTree/inner/store/meta"
 	"github.com/lni/dragonboat/v3/config"
@@ -9,17 +10,21 @@ import (
 )
 
 type App struct {
-	node   *cluster.Node
-	mux    sync.RWMutex
-	ctx    context.Context
-	cancel context.CancelFunc
+	node       *cluster.Node
+	mux        sync.RWMutex
+	ctx        context.Context
+	cancel     context.CancelFunc
+	brokerCore *broker.Core
 }
 
 func NewApp() *App {
 	// todo: get config
 	var (
-		app = &App{}
+		app = &App{
+			brokerCore: broker.NewCore(),
+		}
 	)
+
 	app.node = cluster.NewNode([]cluster.Option{
 		cluster.WithHostConfig(config.NodeHostConfig{
 			RTTMillisecond: 1000,
@@ -46,5 +51,8 @@ func NewApp() *App {
 }
 
 func (a *App) Start(ctx context.Context) error {
+	if err := a.brokerCore.Start(); err != nil {
+		return err
+	}
 	return a.node.Start()
 }

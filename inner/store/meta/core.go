@@ -2,7 +2,6 @@ package meta
 
 import (
 	"github.com/BAN1ce/skyTree/logger"
-	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/proto"
 	"github.com/BAN1ce/skyTree/pkg/util"
 	proto2 "github.com/golang/protobuf/proto"
@@ -114,7 +113,7 @@ func (m *CoreModel) Update(bytes []byte) (statemachine2.Result, error) {
 		command = DecodeCommand(bytes)
 	)
 	switch command.commandType {
-	case packet.SUBSCRIBE:
+	case SubCommand:
 		req := command.ToSub()
 		m.CreateClientSubscription(req.GetClientID(), req.GetSubTopic(), req.GetMeta())
 	default:

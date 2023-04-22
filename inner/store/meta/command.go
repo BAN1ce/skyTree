@@ -6,8 +6,14 @@ import (
 	proto2 "github.com/golang/protobuf/proto"
 )
 
+type commandType = byte
+
+const (
+	SubCommand commandType = iota
+)
+
 type Command struct {
-	commandType byte
+	commandType commandType
 	body        []byte
 }
 
