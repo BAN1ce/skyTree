@@ -21,7 +21,7 @@ func NewApp() *App {
 	// todo: get config
 	var (
 		app = &App{
-			brokerCore: broker.NewCore(),
+			brokerCore: broker.NewCore(broker.WithSubTree(broker.NewSubTree())),
 		}
 	)
 

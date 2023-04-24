@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 	"errors"
-	"github.com/BAN1ce/skyTree/inner/server/tcp"
+	"github.com/BAN1ce/skyTree/inner/broker/server/tcp"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/errs"
 	"net"

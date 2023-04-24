@@ -4,15 +4,19 @@ import (
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/eclipse/paho.golang/packets"
 	"net"
+	"sync"
 )
 
-type ClientHandler func(*Client, *packets.ControlPacket)
+type ClientHandler interface {
+	ListenClientClose(*Client)
+	HandlePacket(*Client, *packets.ControlPacket)
+}
 
 type Client struct {
-	conn    net.Conn
-	ID      string
-	handler ClientHandler
-	user    []packets.User
+	conn net.Conn
+	ID   string
+	user []packets.User
+	mux  sync.RWMutex
 }
 
 func newClient(conn net.Conn) *Client {
@@ -26,7 +30,6 @@ func (c *Client) Write(data []byte) (int, error) {
 }
 
 func (c *Client) Run(handler ClientHandler) {
-	c.handler = handler
 	var (
 		packet *packets.ControlPacket
 		err    error
@@ -39,13 +42,20 @@ func (c *Client) Run(handler ClientHandler) {
 				c.Close()
 				return
 			}
-			c.handler(c, packet)
+			handler.HandlePacket(c, packet)
 		}
 	}()
 }
 
 func (c *Client) Close() {
+	logger.Logger.Info("client close = ", c.ID)
 	if err := c.conn.Close(); err != nil {
 		logger.Logger.Error("close client error = ", err.Error())
 	}
+}
+
+func (c *Client) SetID(id string) {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+	c.ID = id
 }
