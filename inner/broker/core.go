@@ -1,8 +1,10 @@
 package broker
 
 import (
+	"context"
 	"fmt"
 	"github.com/BAN1ce/skyTree/config"
+	"github.com/BAN1ce/skyTree/inner/broker/client"
 	"github.com/BAN1ce/skyTree/inner/broker/server"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/pool"
@@ -20,6 +22,12 @@ func WithUserAuth(auth UserAuth) Option {
 	}
 }
 
+func WithClientManager(manager *client.Manager) Option {
+	return func(core *Core) {
+		core.clientManager = manager
+	}
+}
+
 func WithSubTree(tree SubTree) Option {
 	return func(core *Core) {
 		core.subTree = tree
@@ -30,7 +38,7 @@ type Core struct {
 	server        *server.Server
 	userAuth      UserAuth
 	subTree       SubTree
-	clientManager *ClientManager
+	clientManager *client.Manager
 	bytePool      *pool.BytePool
 	publishPool   *pool.PublishPool
 }
@@ -40,9 +48,8 @@ func NewCore(option ...Option) *Core {
 		ip   = `127.0.0.1`
 		port = 9222
 		core = &Core{
-			clientManager: newClientManager(),
-			bytePool:      pool.NewBytePool(),
-			publishPool:   pool.NewPublishPool(),
+			bytePool:    pool.NewBytePool(),
+			publishPool: pool.NewPublishPool(),
 		}
 	)
 	tcpAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", ip, port))
@@ -56,8 +63,11 @@ func NewCore(option ...Option) *Core {
 
 	return core
 }
+func (c *Core) Name() string {
+	return "broker"
+}
 
-func (c *Core) Start() error {
+func (c *Core) Start(ctx context.Context) error {
 	if err := c.server.Start(); err != nil {
 		return err
 	}
@@ -72,17 +82,17 @@ func (c *Core) acceptConn() {
 			logger.Logger.Info("server closed")
 			return
 		}
-		client := newClient(conn)
+		client := client.NewClient(conn)
 		client.Run(c)
 	}
 }
-func (c *Core) ListenClientClose(client *Client) {
+func (c *Core) ListenClientClose(client *client.Client) {
 	c.clientManager.DeleteClient(client)
 }
 
 // ------------------------------------ handle client MQTT Packet ------------------------------------//
 
-func (c *Core) HandlePacket(client *Client, packet *packets.ControlPacket) {
+func (c *Core) HandlePacket(client *client.Client, packet *packets.ControlPacket) {
 	// TODO : check MQTT version
 	switch packet.FixedHeader.Type {
 	case packets.CONNECT:
@@ -94,7 +104,7 @@ func (c *Core) HandlePacket(client *Client, packet *packets.ControlPacket) {
 	}
 }
 
-func (c *Core) handleConnect(client *Client, packet *packets.Connect) {
+func (c *Core) handleConnect(client *client.Client, packet *packets.Connect) {
 	var (
 		conAck = packets.NewControlPacket(packets.CONNACK).Content.(*packets.Connack)
 		id     = packet.ClientID
@@ -127,7 +137,7 @@ func (c *Core) handleConnect(client *Client, packet *packets.Connect) {
 	}
 }
 
-func (c *Core) handlePublish(client *Client, packet *packets.Publish) {
+func (c *Core) handlePublish(client *client.Client, packet *packets.Publish) {
 	var (
 		topic = packet.Topic
 		qos   = uint8(packet.QoS)
@@ -149,7 +159,7 @@ func (c *Core) handlePublish(client *Client, packet *packets.Publish) {
 }
 
 // handleSubscribe
-func (c *Core) handleSubscribe(client *Client, packet *packets.Subscribe) {
+func (c *Core) handleSubscribe(client *client.Client, packet *packets.Subscribe) {
 	c.subTree.CreateSub(client.ID, packet.Subscriptions)
 	var (
 		subAck = packets.NewControlPacket(packets.SUBACK).Content.(*packets.Suback)
@@ -161,7 +171,7 @@ func (c *Core) handleSubscribe(client *Client, packet *packets.Subscribe) {
 	c.writePacket(client, subAck)
 }
 
-func (c *Core) handleUnsubscribe(client *Client, packet *packets.Unsubscribe) {
+func (c *Core) handleUnsubscribe(client *client.Client, packet *packets.Unsubscribe) {
 	var (
 		packetID = packet.PacketID
 		unsubAck = packets.NewControlPacket(packets.UNSUBACK).Content.(*packets.Unsuback)
@@ -176,7 +186,7 @@ func (c *Core) handleUnsubscribe(client *Client, packet *packets.Unsubscribe) {
 }
 
 // disconnectClient with code
-func (c *Core) disconnectClient(code byte, client *Client) {
+func (c *Core) disconnectClient(code byte, client *client.Client) {
 	var (
 		disconnect = packets.NewControlPacket(packets.DISCONNECT).Content.(*packets.Disconnect)
 	)
@@ -189,7 +199,7 @@ func (c *Core) disconnectClient(code byte, client *Client) {
 
 // ----------------------------------------- support ---------------------------------------------------//
 // writePacket for collect all error log
-func (c *Core) writePacket(client *Client, packet packets.Packet) {
+func (c *Core) writePacket(client *client.Client, packet packets.Packet) {
 	_, err := packet.WriteTo(client)
 	if err != nil {
 		logger.Logger.Error("write to client error = ", err.Error())

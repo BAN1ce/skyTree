@@ -1,4 +1,4 @@
-package broker
+package client
 
 import (
 	"github.com/BAN1ce/skyTree/logger"
@@ -16,15 +16,15 @@ type event struct {
 	client    *Client
 }
 
-type ClientManager struct {
+type Manager struct {
 	mux     sync.RWMutex
 	clients map[string]*Client
 	event   chan *event
 }
 
-func newClientManager() *ClientManager {
+func NewManager() *Manager {
 	var (
-		c = &ClientManager{
+		c = &Manager{
 			clients: map[string]*Client{},
 			event:   make(chan *event, 100),
 		}
@@ -33,21 +33,21 @@ func newClientManager() *ClientManager {
 	return c
 }
 
-func (c *ClientManager) CreateClient(client *Client) {
+func (c *Manager) CreateClient(client *Client) {
 	c.event <- &event{
 		client:    client,
 		eventType: eventTypeAddClient,
 	}
 }
 
-func (c *ClientManager) DeleteClient(client *Client) {
+func (c *Manager) DeleteClient(client *Client) {
 	c.event <- &event{
 		client:    client,
 		eventType: eventTypeRemClient,
 	}
 }
 
-func (c *ClientManager) listenClose() {
+func (c *Manager) listenClose() {
 	// TODO: graceful shutdown
 	for event := range c.event {
 		switch event.eventType {
@@ -59,7 +59,7 @@ func (c *ClientManager) listenClose() {
 	}
 }
 
-func (c *ClientManager) createClient(client *Client) {
+func (c *Manager) createClient(client *Client) {
 	if tmp, ok := c.clients[client.ID]; ok {
 		if tmp != client {
 			tmp.Close()
@@ -69,7 +69,7 @@ func (c *ClientManager) createClient(client *Client) {
 }
 
 // deleteClient delete client from client manager and close client
-func (c *ClientManager) deleteClient(client *Client) {
+func (c *Manager) deleteClient(client *Client) {
 	if tmp, ok := c.clients[client.ID]; ok {
 		if tmp == client {
 			client.Close()
@@ -79,10 +79,28 @@ func (c *ClientManager) deleteClient(client *Client) {
 	}
 }
 
-func (c *ClientManager) Write(clientID string, packet packets.Packet) (int64, error) {
+func (c *Manager) ReadClient(clientID string) (*Client, bool) {
+	c.mux.RLock()
+	defer c.mux.RUnlock()
+	if client, ok := c.clients[clientID]; ok {
+		return client, true
+	}
+	return nil, false
+}
+
+func (c *Manager) Write(clientID string, packet packets.Packet) (int64, error) {
 	if client, ok := c.clients[clientID]; ok {
 		return packet.WriteTo(client)
 	}
 	logger.Logger.Info("client not found = ", clientID)
 	return 0, nil
+}
+
+func (c *Manager) Info() *Info {
+	var (
+		info = Info{
+			Total: len(c.clients),
+		}
+	)
+	return &info
 }

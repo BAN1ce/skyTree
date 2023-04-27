@@ -1,4 +1,4 @@
-package broker
+package client
 
 import (
 	"github.com/BAN1ce/skyTree/logger"
@@ -7,19 +7,21 @@ import (
 	"sync"
 )
 
-type ClientHandler interface {
+type Handler interface {
 	ListenClientClose(*Client)
 	HandlePacket(*Client, *packets.ControlPacket)
 }
 
 type Client struct {
-	conn net.Conn
-	ID   string
-	user []packets.User
-	mux  sync.RWMutex
+	conn      net.Conn
+	handler   Handler
+	ID        string
+	user      []packets.User
+	mux       sync.RWMutex
+	closeOnce sync.Once
 }
 
-func newClient(conn net.Conn) *Client {
+func NewClient(conn net.Conn) *Client {
 	return &Client{
 		conn: conn,
 	}
@@ -29,7 +31,8 @@ func (c *Client) Write(data []byte) (int, error) {
 	return c.conn.Write(data)
 }
 
-func (c *Client) Run(handler ClientHandler) {
+func (c *Client) Run(handler Handler) {
+	c.handler = handler
 	var (
 		packet *packets.ControlPacket
 		err    error
@@ -48,10 +51,14 @@ func (c *Client) Run(handler ClientHandler) {
 }
 
 func (c *Client) Close() {
-	logger.Logger.Info("client close = ", c.ID)
-	if err := c.conn.Close(); err != nil {
-		logger.Logger.Error("close client error = ", err.Error())
-	}
+	c.closeOnce.Do(func() {
+		logger.Logger.Info("client close = ", c.ID)
+		if err := c.conn.Close(); err != nil {
+			logger.Logger.Error("close client error = ", err.Error())
+		}
+		c.handler.ListenClientClose(c)
+	})
+
 }
 
 func (c *Client) SetID(id string) {

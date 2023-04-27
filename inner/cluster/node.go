@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"github.com/lni/dragonboat/v3"
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/statemachine"
@@ -55,7 +56,7 @@ func NewNode(option ...Option) *Node {
 	return n
 }
 
-func (n *Node) Start() error {
+func (n *Node) Start(ctx context.Context) error {
 	var (
 		err error
 	)
@@ -70,4 +71,7 @@ func (n *Node) Start() error {
 
 func (n *Node) Close() error {
 	return nil
+}
+func (n *Node) Name() string {
+	return "cluster"
 }

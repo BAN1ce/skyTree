@@ -1,0 +1,16 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "title": "SkyTree API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "host": "localhost:8080",
+    "basePath": "/api/v1",
+    "paths": {},
+    "securityDefinitions": {
+        "BasicAuth": {
+            "type": "basic"
+        }
+    }
+}
