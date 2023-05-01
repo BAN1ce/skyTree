@@ -1,0 +1,46 @@
+package broker
+
+import (
+	"github.com/BAN1ce/skyTree/inner/broker/client"
+	"github.com/BAN1ce/skyTree/inner/broker/session"
+	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/middleware"
+)
+
+type Option func(*Broker)
+
+func WithUserAuth(auth middleware.UserAuth) Option {
+	return func(core *Broker) {
+		core.userAuth = auth
+	}
+}
+
+func WithClientManager(manager *client.Manager) Option {
+	return func(core *Broker) {
+		core.clientManager = manager
+	}
+}
+
+func WithSubTree(tree pkg.SubTree) Option {
+	return func(core *Broker) {
+		core.subTree = tree
+	}
+}
+
+func AppendMiddleware(packet byte, handle ...middleware.PacketMiddleware) Option {
+	return func(core *Broker) {
+		core.preMiddleware[packet] = append(core.preMiddleware[packet], handle...)
+	}
+}
+
+func WithHandlers(handlers *Handlers) Option {
+	return func(broker *Broker) {
+		broker.handlers = handlers
+	}
+}
+
+func WithSessionManager(manager *session.Manager) Option {
+	return func(broker *Broker) {
+		broker.sessionManager = manager
+	}
+}

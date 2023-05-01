@@ -11,5 +11,5 @@ type SubscriptionTree interface {
 
 	GetHashSubTopic(topicSection string) (map[string]int64, error)
 
-	GetTopicSubscribers(topic string) ([]*proto.Client, error)
+	GetTopicSubscribers(topic string) ([]*proto.ClientModel, error)
 }

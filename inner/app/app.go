@@ -5,6 +5,7 @@ import (
 	"github.com/BAN1ce/skyTree/inner/api"
 	"github.com/BAN1ce/skyTree/inner/broker"
 	"github.com/BAN1ce/skyTree/inner/broker/client"
+	"github.com/BAN1ce/skyTree/inner/broker/session"
 	"github.com/BAN1ce/skyTree/inner/cluster"
 	"log"
 	"sync"
@@ -19,16 +20,29 @@ type App struct {
 	mux        sync.RWMutex
 	ctx        context.Context
 	cancel     context.CancelFunc
-	brokerCore *broker.Core
+	brokerCore *broker.Broker
 	components []component
 }
 
 func NewApp() *App {
 	// todo: get config
 	var (
-		clientManager = client.NewManager()
-		app           = &App{
-			brokerCore: broker.NewCore(broker.WithClientManager(clientManager), broker.WithSubTree(broker.NewSubTree())),
+		clientManager  = client.NewManager()
+		sessionManager = session.NewSessionManager()
+		app            = &App{
+			brokerCore: broker.NewBroker(
+				broker.WithSessionManager(sessionManager),
+				broker.WithClientManager(clientManager),
+				broker.WithSubTree(broker.NewSubTree()),
+				broker.WithHandlers(&broker.Handlers{
+					Connect:    broker.NewConnectHandler(),
+					Publish:    broker.NewPublishHandler(),
+					Ping:       broker.NewPingHandler(),
+					Sub:        broker.NewSubHandler(),
+					UnSub:      broker.NewUnsubHandler(),
+					Auth:       broker.NewAuthHandler(),
+					Disconnect: broker.NewDisconnectHandler(),
+				})),
 		}
 	)
 	app.components = []component{

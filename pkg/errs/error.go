@@ -8,3 +8,11 @@ var (
 	ErrServerStarted        = errors.New("server has started")
 	ErrServerNotStarted     = errors.New("server not started")
 )
+
+var (
+	ErrorInvalidPacket        = errors.New("invalid packet")
+	ErrConnectPacketDuplicate = errors.New("connect packet duplicate")
+	ErrProtocolNotSupport     = errors.New("protocol not support")
+	ErrPasswordWrong          = errors.New("password wrong")
+	ErrAuthHandlerNotSet      = errors.New("auth handler not set")
+)

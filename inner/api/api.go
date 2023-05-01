@@ -35,6 +35,8 @@ func NewAPI(addr string, option ...Option) *API {
 }
 func (a *API) Start(ctx context.Context) error {
 	a.httpServer = echo.New()
+	a.httpServer.Debug = false
+	a.httpServer.HideBanner = true
 	a.route()
 	return a.httpServer.Start(a.addr)
 }

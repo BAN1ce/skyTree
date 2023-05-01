@@ -5,13 +5,6 @@ import (
 	"sync"
 )
 
-type SubTree interface {
-	CreateSub(clientID string, topics map[string]packets.SubOptions)
-	DeleteSub(clientID string, topics []string)
-	Match(topic string) (clientIDQos map[string]int32)
-	DeleteClient(clientID string)
-}
-
 type subTree struct {
 	mux     sync.RWMutex
 	hashSub map[string]map[string]packets.SubOptions

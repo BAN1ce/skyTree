@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	app2 "github.com/BAN1ce/skyTree/inner/app"
 	"github.com/BAN1ce/skyTree/logger"
 	"os"
@@ -23,6 +24,7 @@ func main() {
 		ctx, cancel = context.WithCancel(context.Background())
 	)
 	app.Start(ctx)
+	fmt.Println(logo())
 	logger.Logger.Info("start app success")
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
@@ -31,4 +33,16 @@ func main() {
 	time.Sleep(1 * time.Second)
 	logger.Logger.Info("stop app success")
 	os.Exit(0)
+}
+func logo() string {
+	return `
+   _____ _       _______            
+  / ____| |     |__   __|           
+ | (___ | | ___   _| |_ __ ___  ___ 
+  \___ \| |/ / | | | | '__/ _ \/ _ \
+  ____) |   <| |_| | | | |  __/  __/
+ |_____/|_|\_\\__, |_|_|  \___|\___|
+               __/ |                
+              |___/                 
+`
 }
