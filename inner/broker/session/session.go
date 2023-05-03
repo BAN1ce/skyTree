@@ -1,6 +1,9 @@
 package session
 
-import "github.com/BAN1ce/skyTree/pkg"
+import (
+	"github.com/BAN1ce/skyTree/pkg"
+	"strings"
+)
 
 type Session struct {
 	m map[pkg.SessionKey]string
@@ -27,4 +30,20 @@ func (s *Session) Get(key pkg.SessionKey) string {
 func (s *Session) Destroy() {
 	s.m = nil
 	return
+}
+
+func (s *Session) GetWithPrefix(prefix string, keyWithPrefix bool) map[string]string {
+	var (
+		tmp = make(map[string]string)
+	)
+	for k, v := range s.m {
+		if index := strings.Index(string(k), prefix); index != -1 {
+			if keyWithPrefix {
+				tmp[string(k[index:])] = v
+			} else {
+				tmp[string(k)] = v
+			}
+		}
+	}
+	return tmp
 }
