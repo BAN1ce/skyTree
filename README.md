@@ -4,9 +4,35 @@ A distributed message broker base on mqtt5.0 protocol.
 
 # Broker Structure
 
-```mermaid
+## components
+
+### Listener
+A distributed listener for client connect. support TCP and WebSocket protocol.
+### Session
+A distributed session manager for client implement by Raft.
+### Store
+Store publish messages. Any database implement store interface. support mysql,redis,leveldb and so on.
+
+```puml
+@startuml
+cloud "Broker"{
+        component "Session" {
+        component "SessionStore"
+        component "SessionQueue"
+        }
+        component "Store" {
+        component "MessageStore"
+        component "MessageQueue"
+        }
+        component "Listener" {
+        component "TCP"
+        component "WebSocket"
+        }
+}
+@enduml
 
 ```
+
 # Quick Start
 
 # Broker Handler Process
@@ -48,6 +74,7 @@ Broker -->> Client : response ack
 ```
 
 # Store Structure
+
 ```mermaid
  classDiagram
     class Packet
@@ -66,7 +93,6 @@ Broker -->> Client : response ack
     Queue: DeleteByOffset(offset int64)
  
 ```
-
 
 # API
 
