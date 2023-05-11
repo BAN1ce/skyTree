@@ -73,6 +73,27 @@ Broker -->> Client : response ack
 
 ```
 
+# How Client Read Store With Session
+
+```mermaid
+    sequenceDiagram
+participant c as Client
+participant store as Store
+participant session asSession
+
+c ->> store : request topics's message by last message id if exist or emtpy message id
+store -->> session : return messages 
+
+alt return zero message
+    c ->> session : add once listen client's all topics's publish event
+    c -->> c : block wait event trigger
+    alt event trigger
+        c ->> store: read event's topic's message
+        c -->> c : cancel block wait
+    end       
+end
+
+```
 # Store Structure
 
 ```mermaid
