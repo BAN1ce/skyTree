@@ -5,6 +5,7 @@ import (
 	_ "github.com/BAN1ce/skyTree/docs"
 	"github.com/BAN1ce/skyTree/inner/api/controller"
 	"github.com/BAN1ce/skyTree/inner/broker/client"
+	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/labstack/echo/v4"
 	echoSwagger "github.com/swaggo/echo-swagger"
 )
@@ -16,12 +17,18 @@ func WithClientManager(manager *client.Manager) Option {
 		api.manager = manager
 	}
 }
+func WithStore(store pkg.Store) Option {
+	return func(api *API) {
+		api.store = store
+	}
+}
 
 type API struct {
 	addr       string
 	httpServer *echo.Echo
 	apiV1      *echo.Group
 	manager    *client.Manager
+	store      pkg.Store
 }
 
 func NewAPI(addr string, option ...Option) *API {
@@ -47,6 +54,8 @@ func (a *API) route() {
 	a.apiV1.GET("/ping", func(ctx echo.Context) error {
 		return ctx.String(200, "pong")
 	})
+	a.client()
+	a.message()
 }
 
 func (a *API) client() {
@@ -57,6 +66,12 @@ func (a *API) client() {
 	a.apiV1.DELETE("/clients/:id", ctr.Delete)
 }
 
+func (a *API) message() {
+	var (
+		ctr = controller.NewMessage(a.store)
+	)
+	a.apiV1.GET("/message", ctr.Info)
+}
 func (a *API) Name() string {
 	return "api"
 }

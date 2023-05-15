@@ -14,6 +14,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 )
 
 type Handlers struct {
@@ -30,10 +31,12 @@ type brokerHandler interface {
 	Handle(broker *Broker, client *client.Client, rawPacket *packets.ControlPacket)
 }
 type Broker struct {
+	ctx            context.Context
 	mux            sync.RWMutex
 	server         *server.Server
 	userAuth       middleware.UserAuth
 	subTree        pkg.SubTree
+	store          pkg.Store
 	clientManager  *client.Manager
 	sessionManager *session.Manager
 	publishPool    *pool.PublishPool
@@ -68,6 +71,7 @@ func (b *Broker) Name() string {
 }
 
 func (b *Broker) Start(ctx context.Context) error {
+	b.ctx = ctx
 	if err := b.server.Start(); err != nil {
 		return err
 	}
@@ -82,8 +86,11 @@ func (b *Broker) acceptConn() {
 			logger.Logger.Info("server closed")
 			return
 		}
-		newClient := client.NewClient(conn)
-		newClient.Run(b)
+		newClient := client.NewClient(conn, client.WithStore(b.store), client.WithConfig(&client.Config{
+			WindowSize:       10,
+			ReadStoreTimeout: 3 * time.Second,
+		}))
+		newClient.Run(b.ctx, b)
 	}
 }
 func (b *Broker) ListenClientClose(client *client.Client) {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/eclipse/paho.golang/packets"
 	"github.com/spf13/cast"
+	"time"
 )
 
 type SessionKey string
@@ -43,6 +44,10 @@ const (
 	WillPayload                        = SessionKey("will_payload")
 )
 const (
+	SubTopic = SessionKey("sub_topic")
+)
+
+const (
 	WillFlagTrue    = "true"
 	WillFlagFalse   = "false"
 	WillQos0        = "0"
@@ -55,8 +60,24 @@ const (
 type Session interface {
 	Get(key SessionKey) string
 	Set(key SessionKey, value string)
-	GetWithPrefix(prefix string, keyWithPrefix bool) map[string]string
+	GetWithPrefix(prefix SessionKey, keyWithPrefix bool) map[string]string
+	OnceListenPublishEvent(clientID string, f func(topic, id string))
 	Destroy()
+	SessionTopic
+}
+
+type SessionTopic interface {
+	ReadSubTopics() map[string]int32
+	CreateSubTopics(topic string, qos int32)
+	DeleteSubTopics(topic string)
+
+	CreateTopicMessageID(topic string, messageID string)
+	ReadTopicMessageID(topic string) string
+	GetTopicsMessageID() map[string]string
+}
+
+type SessionMeta interface {
+	SetLastAliveTime(time time.Time)
 }
 
 func SessionSetWillFlag(session Session, willFlag string) {

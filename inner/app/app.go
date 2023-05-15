@@ -6,6 +6,7 @@ import (
 	"github.com/BAN1ce/skyTree/inner/broker"
 	"github.com/BAN1ce/skyTree/inner/broker/client"
 	"github.com/BAN1ce/skyTree/inner/broker/session"
+	"github.com/BAN1ce/skyTree/inner/broker/store"
 	"github.com/BAN1ce/skyTree/inner/cluster"
 	"log"
 	"sync"
@@ -29,8 +30,10 @@ func NewApp() *App {
 	var (
 		clientManager  = client.NewManager()
 		sessionManager = session.NewSessionManager()
+		store          = store.NewNutsDBStore()
 		app            = &App{
 			brokerCore: broker.NewBroker(
+				broker.WithStore(store),
 				broker.WithSessionManager(sessionManager),
 				broker.WithClientManager(clientManager),
 				broker.WithSubTree(broker.NewSubTree()),
@@ -47,7 +50,7 @@ func NewApp() *App {
 	)
 	app.components = []component{
 		app.brokerCore,
-		api.NewAPI(":9527", api.WithClientManager(clientManager)),
+		api.NewAPI(":9527", api.WithClientManager(clientManager), api.WithStore(store)),
 	}
 
 	// app.node = cluster.NewNode([]cluster.Option{

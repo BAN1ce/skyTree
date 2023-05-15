@@ -44,3 +44,9 @@ func WithSessionManager(manager *session.Manager) Option {
 		broker.sessionManager = manager
 	}
 }
+
+func WithStore(store pkg.Store) Option {
+	return func(broker *Broker) {
+		broker.store = store
+	}
+}

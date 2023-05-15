@@ -71,4 +71,5 @@ func (c *ConnectHandler) Handle(broker *Broker, client *client2.Client, packet *
 	client.SetState(client2.ReceivedConnect)
 	broker.clientManager.CreateClient(client)
 	broker.writePacket(client, conAck)
+	client.RunSession()
 }

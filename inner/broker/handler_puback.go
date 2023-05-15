@@ -9,6 +9,12 @@ type PubAck struct {
 }
 
 func (a *PubAck) Handle(broker *Broker, client *client.Client, rawPacket *packets.ControlPacket) {
+	var (
+		packet = rawPacket.Content.(*packets.Puback)
+	)
+	if packet.ReasonCode == packets.PubackSuccess {
+
+	}
 	// TODO implement me
 	panic("implement me")
 }
