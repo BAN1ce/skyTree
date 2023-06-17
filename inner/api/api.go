@@ -7,6 +7,7 @@ import (
 	"github.com/BAN1ce/skyTree/inner/broker/client"
 	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/labstack/echo/v4"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	echoSwagger "github.com/swaggo/echo-swagger"
 )
 
@@ -50,6 +51,7 @@ func (a *API) Start(ctx context.Context) error {
 
 func (a *API) route() {
 	a.httpServer.GET("/swagger/*", echoSwagger.WrapHandler)
+	a.httpServer.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 	a.apiV1 = a.httpServer.Group("/api/v1")
 	a.apiV1.GET("/ping", func(ctx echo.Context) error {
 		return ctx.String(200, "pong")

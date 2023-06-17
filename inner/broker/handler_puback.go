@@ -13,6 +13,7 @@ func (a *PubAck) Handle(broker *Broker, client *client.Client, rawPacket *packet
 		packet = rawPacket.Content.(*packets.Puback)
 	)
 	if packet.ReasonCode == packets.PubackSuccess {
+		panic("implement me")
 
 	}
 	// TODO implement me

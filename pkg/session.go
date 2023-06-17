@@ -1,9 +1,6 @@
 package pkg
 
 import (
-	"fmt"
-	"github.com/eclipse/paho.golang/packets"
-	"github.com/spf13/cast"
 	"time"
 )
 
@@ -58,54 +55,63 @@ const (
 )
 
 type Session interface {
-	Get(key SessionKey) string
-	Set(key SessionKey, value string)
-	GetWithPrefix(prefix SessionKey, keyWithPrefix bool) map[string]string
-	OnceListenPublishEvent(clientID string, f func(topic, id string))
 	Destroy()
 	SessionTopic
 }
 
 type SessionTopic interface {
-	ReadSubTopics() map[string]int32
+	ReleaseTopicSession(topic string)
+
+	OnceListenPublishEvent(topic string, f func(topic, id string))
+
+	// CreateSubTopics create sub topic with QoS
 	CreateSubTopics(topic string, qos int32)
+
+	// CreateTopicUnAckMessageID ReadTopicUnAckMessageID read topic un ack message id when client connect again
+	CreateTopicUnAckMessageID(topic string, messageID []string)
+
+	// UpdateTopicLastAckedMessageID update topic last acked message id
+	UpdateTopicLastAckedMessageID(topic string, messageID string)
+
+	// ReadSubTopics read all sub topics
+	ReadSubTopics() map[string]int32
+
+	// ReadTopicLastAckedMessageID read topic last acked message id for client read next message id
+	ReadTopicLastAckedMessageID(topic string) (string, bool)
+
+	// ReadTopicUnAckMessageID  read topic un ack message id when client connect again
+	ReadTopicUnAckMessageID(topic string) []string
+
+	ReadSubTopicsLastAckedMessageID() map[string]string
+
+	// DeleteSubTopics delete sub topic
 	DeleteSubTopics(topic string)
 
-	CreateTopicMessageID(topic string, messageID string)
-	ReadTopicMessageID(topic string) string
-	GetTopicsMessageID() map[string]string
+	// DeleteTopicUnAckMessageID delete topic un ack message id when client ack message
+	DeleteTopicUnAckMessageID(topic string, messageID string)
 }
 
 type SessionMeta interface {
 	SetLastAliveTime(time time.Time)
 }
-
-func SessionSetWillFlag(session Session, willFlag string) {
-	session.Set(WillFlag, willFlag)
+type SessionExpiry interface {
+	GetSessionExpiryInterval() uint32
+	SetSessionExpiryInterval(uint32)
 }
 
-func SetPropertyToSession(session Session, properties *packets.Properties) {
-	session.Set(PropertySessionExpiryInterval, cast.ToString(properties.SessionExpiryInterval))
-	session.Set(PropertyReceiveMaximum, cast.ToString(properties.ReceiveMaximum))
-	session.Set(PropertyMaximumPacketSize, cast.ToString(properties.MaximumPacketSize))
-	session.Set(PropertyMaximumQoS, cast.ToString(properties.MaximumQOS))
-	session.Set(PropertyTopicAliasMaximum, cast.ToString(properties.TopicAliasMaximum))
-	session.Set(PropertyRequestResponseInfo, cast.ToString(properties.RequestResponseInfo))
-	session.Set(PropertyRequestProblemInfo, cast.ToString(properties.RequestProblemInfo))
-	for _, v := range properties.User {
-		session.Set(SessionKey(fmt.Sprintf("%s.%s", PropertyUserProperty, v.Key)), cast.ToString(v.Value))
-	}
-}
-
-func SetWillPropertyToSession(session Session, properties *packets.Properties) {
-	session.Set(WillPropertyMessageExpiryInterval, cast.ToString(properties.MessageExpiry))
-	session.Set(WillPropertyWillDelayInterval, cast.ToString(properties.WillDelayInterval))
-	session.Set(WillPropertyPayloadFormatIndicator, cast.ToString(properties.PayloadFormat))
-	session.Set(WillPropertyContentType, cast.ToString(properties.ContentType))
-	session.Set(WillPropertyResponseTopic, cast.ToString(properties.ResponseTopic))
-	session.Set(WillPropertyCorrelationData, cast.ToString(properties.CorrelationData))
-	session.Set(WillPropertySubscriptionIdentifier, cast.ToString(properties.SubscriptionIdentifier))
-	for _, v := range properties.User {
-		session.Set(SessionKey(fmt.Sprintf("%s.%s", WillPropertyUserProperty, v.Key)), cast.ToString(v.Value))
-	}
-}
+// func SessionSetWillFlag(session Session, willFlag string) {
+// 	session.Set(WillFlag, willFlag)
+// }
+//
+// func SetWillPropertyToSession(session Session, properties *packets.Properties) {
+// 	session.Set(WillPropertyMessageExpiryInterval, cast.ToString(properties.MessageExpiry))
+// 	session.Set(WillPropertyWillDelayInterval, cast.ToString(properties.WillDelayInterval))
+// 	session.Set(WillPropertyPayloadFormatIndicator, cast.ToString(properties.PayloadFormat))
+// 	session.Set(WillPropertyContentType, cast.ToString(properties.ContentType))
+// 	session.Set(WillPropertyResponseTopic, cast.ToString(properties.ResponseTopic))
+// 	session.Set(WillPropertyCorrelationData, cast.ToString(properties.CorrelationData))
+// 	session.Set(WillPropertySubscriptionIdentifier, cast.ToString(properties.SubscriptionIdentifier))
+// 	for _, v := range properties.User {
+// 		session.Set(SessionKey(fmt.Sprintf("%s,%s", WillPropertyUserProperty, v.Key)), cast.ToString(v.Value))
+// 	}
+// }

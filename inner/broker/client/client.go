@@ -1,16 +1,16 @@
 package client
 
 import (
-	"container/list"
 	"context"
+	"github.com/BAN1ce/skyTree/inner/broker/client/qos"
+	"github.com/BAN1ce/skyTree/inner/broker/client/topic"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/BAN1ce/skyTree/pkg/state"
 	"github.com/BAN1ce/skyTree/pkg/util"
 	"github.com/eclipse/paho.golang/packets"
-	"github.com/eclipse/paho.golang/paho"
 	"net"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -25,42 +25,38 @@ type Config struct {
 }
 
 type Handler interface {
-	ListenClientClose(*Client)
 	HandlePacket(*Client, *packets.ControlPacket)
 }
 
 type Client struct {
-	ctx               context.Context
-	mux               sync.RWMutex
-	conn              net.Conn
-	ID                string
-	handler           Handler
-	closeOnce         sync.Once
-	state             state.State
-	options           *Options
-	session           pkg.Session
-	waitAck           *list.List
-	packetIDFactory   PacketIDFactory
-	publishBucket     *util.Bucket
-	messages          chan pkg.Message
-	connectProperties paho.ConnectProperties
+	ID              string
+	ctx             context.Context
+	mux             sync.RWMutex
+	conn            net.Conn
+	handler         Handler
+	closeOnce       sync.Once
+	state           state.State
+	components      *Components
+	packetIDFactory PacketIDFactory
+	publishBucket   *util.Bucket
+	messages        chan pkg.Message
+	topics          *topic.Topics
 }
 
-func NewClient(conn net.Conn, option ...Option) *Client {
+func NewClient(conn net.Conn, option ...Component) *Client {
 	var (
 		c = &Client{
-			conn:    conn,
-			options: new(Options),
-			waitAck: list.New(),
+			conn:       conn,
+			components: new(Components),
 		}
 	)
 
 	for _, o := range option {
-		o(c.options)
+		o(c.components)
 	}
 	c.packetIDFactory = util.NewPacketIDFactory()
-	c.messages = make(chan pkg.Message, c.options.cfg.WindowSize)
-	c.publishBucket = util.NewBucket(c.options.cfg.WindowSize)
+	c.messages = make(chan pkg.Message, c.components.cfg.WindowSize)
+	c.publishBucket = util.NewBucket(c.components.cfg.WindowSize)
 	return c
 }
 
@@ -72,139 +68,57 @@ func (c *Client) Run(ctx context.Context, handler Handler) {
 	c.ctx = ctx
 	c.handler = handler
 	var (
-		packet *packets.ControlPacket
-		err    error
+		controlPacket *packets.ControlPacket
+		err           error
 	)
-	go func() {
-		for {
-			packet, err = packets.ReadPacket(c.conn)
-			if err != nil {
-				logger.Logger.Error("read packet error = ", err.Error())
-				c.Close()
-				return
-			}
-			handler.HandlePacket(c, packet)
-		}
-	}()
-}
-
-func (c *Client) RunSession() {
-	go func() {
-		c.readMessages()
-	}()
-}
-
-func (c *Client) readMessages() {
 	for {
-		select {
-		case <-c.ctx.Done():
-			return
-		case msg := <-c.messages:
-			// TODO: record message's id to session
-			// publish message to client
-			c.pushToWindow(msg)
-		default:
-			c.readStoreToFillChannel()
-			if len(c.messages) > 0 {
-				continue
-			}
-			// waiting for store event
-			<-c.storeReady().Done()
-		}
-	}
-}
-
-func (c *Client) storeReady() context.Context {
-	var (
-		ctx, cancel = context.WithCancel(c.ctx)
-	)
-	c.session.OnceListenPublishEvent(c.ID, func(topic, id string) {
-		c.mux.Lock()
-		defer c.mux.Unlock()
-		if c.readMessageStoreByID(topic, id) > 0 {
-			cancel()
+		controlPacket, err = packets.ReadPacket(c.conn)
+		if err != nil {
+			logger.Logger.Error("read controlPacket error = ", err.Error())
+			c.Close()
 			return
 		}
-		logger.Logger.Warn("readMessageStoreByID: no message", "topic = ", topic, "id = ", id)
-		cancel()
-	})
-	return ctx
+		handler.HandlePacket(c, controlPacket)
+	}
 }
 
-// readStoreToFillChannel read message from store util fill the messages channel or all topics done
-func (c *Client) readStoreToFillChannel() {
+func (c *Client) HandleSub(subscribe *packets.Subscribe) map[string]byte {
 	var (
-		i int
+		topics = subscribe.Subscriptions
+		failed = map[string]byte{}
 	)
-	// TODO: prevent some topics hunger
-	for topic, id := range c.session.GetTopicsMessageID() {
-		i += c.readMessageStoreByID(topic, id)
-		if i >= c.options.cfg.WindowSize {
-			return
+	for t, v := range topics {
+		// FIXME qos 和其它配置
+		if err := c.topics.CreateTopic(t, v.QoS); err != nil {
+			failed[t] = 0x80
+		} else {
+			failed[t] = v.QoS
 		}
 	}
+	return failed
 }
 
-func (c *Client) readMessageStoreByID(topic, id string) int {
-	var (
-		i           int
-		ctx, cancel = context.WithTimeout(c.ctx, c.options.cfg.ReadStoreTimeout)
-	)
-	defer cancel()
-	if message := c.options.Store.ReadTopicMessageByID(ctx, topic, id, c.options.cfg.WindowSize); len(message) > 0 {
-		for _, msg := range message {
-			select {
-			case c.messages <- msg:
-				i++
-			default:
-			}
-		}
-	}
-	return i
-}
+func (c *Client) HandleUnSub(topicName string) {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+	c.topics.DeleteTopic(topicName)
 
-func (c *Client) pushToWindow(msg pkg.Message) {
-	select {
-	case <-c.ctx.Done():
-		return
-	case <-c.publishBucket.GetToken():
-		pub := packets.NewControlPacket(packets.PUBLISH).Content.(*packets.Publish)
-		pub.Payload = msg.GetPayload()
-		pub.Topic = msg.GetTopic()
-		pub.PacketID = c.packetIDFactory.Generate()
-		c.writePacket(pub)
-		c.waitAck.PushBack(newWaitAckPacket(pub, msg.GetID()))
-	}
 }
 
 func (c *Client) HandlePubAck(pubAck packets.Puback) {
-	for e := c.waitAck.Front(); e != nil; e = e.Next() {
-		if e.Value.(*waitAckPacket).packet.PacketID == pubAck.PacketID {
-			e.Value.(*waitAckPacket).ack = true
-			// Think about it, if the ack is not in order, it will cause the ack to be blocked, should release a bucket here ?
-			break
-		}
-	}
-	for e := c.waitAck.Front(); e != nil; e = e.Next() {
-		waitAckPacket := e.Value.(*waitAckPacket)
-		if waitAckPacket.ack {
-			break
-		}
-		c.waitAck.Remove(e)
-		// Fixme: bucket leak
-		c.session.CreateTopicMessageID(waitAckPacket.packet.Topic, waitAckPacket.messageID)
-		c.publishBucket.PutToken()
-	}
+
 }
 
 func (c *Client) Close() {
 	c.closeOnce.Do(func() {
 		logger.Logger.Info("client close = ", c.ID)
 		if err := c.conn.Close(); err != nil {
-			logger.Logger.Error("close client error = ", err.Error())
+			logger.Logger.Info("close client error = ", err.Error())
+		}
+		if err := c.topics.Close(); err != nil {
+			logger.Logger.Warn("close topics error = ", err.Error())
 		}
 		// TODO: check will message
-		c.handler.ListenClientClose(c)
 	})
 
 }
@@ -215,62 +129,57 @@ func (c *Client) SetID(id string) {
 	c.ID = id
 }
 
-func (c *Client) SetState(state uint64) {
-	c.mux.Lock()
-	defer c.mux.Unlock()
-	c.state.SetState(state)
-}
-
-func (c *Client) IsState(state uint64) bool {
-	c.mux.RLock()
-	defer c.mux.RUnlock()
-	return c.state.IsState(state)
-}
-
-func (c *Client) RemState(state uint64) {
-	c.mux.Lock()
-	defer c.mux.Unlock()
-	c.state.RemState(state)
-}
-
 func (c *Client) WritePacket(packet packets.Packet) {
-	if _, err := packet.WriteTo(c); err != nil {
-		logger.Logger.Info("write packet error = ", err.Error())
-		c.Close()
-	}
+	c.writePacket(packet)
 }
 
 func (c *Client) writePacket(packet packets.Packet) {
-	if _, err := packet.WriteTo(c); err != nil {
+	var (
+		buf              = pool.ByteBufferPool.Get()
+		prepareWriteSize int64
+		err              error
+	)
+	defer pool.ByteBufferPool.Put(buf)
+	if prepareWriteSize, err = packet.WriteTo(buf); err != nil {
+		logger.Logger.Info("write packet error = ", err.Error())
+		c.Close()
+	}
+	// TODO: check maximum packet size
+	if prepareWriteSize < 0 {
+		logger.Logger.Info("write packet error = ", err.Error())
+		c.Close()
+	}
+	if _, err = c.conn.Write(buf.Bytes()); err != nil {
 		logger.Logger.Info("write packet error = ", err.Error())
 		c.Close()
 	}
 }
 
-func (c *Client) SetSession(session pkg.Session) {
+func (c *Client) SetSession(session pkg.Session) error {
+	var (
+		err error
+	)
 	c.mux.Lock()
-	c.session = session
+	c.components.session = session
+	c.topics, err = topic.NewTopicWithSession(c.ctx, session,
+		topic.WithStore(c.components.Store),
+		topic.WithWriter(c),
+	)
 	c.mux.Unlock()
+	return err
 }
 
 func (c *Client) GetSession() pkg.Session {
-	return c.session
+	return c.components.session
 }
 
-func (c *Client) DestroySession() {
-	c.mux.Lock()
-	c.session.Destroy()
-	c.mux.Unlock()
+func (c *Client) Qos1JobTimeout(job *qos.PubTask) {
+	c.Close()
+	// TODO: store unAck message's id to session
 }
 
-func (c *Client) SetLastAliveTime(time int64) {
-	c.mux.Lock()
-	c.session.Set(pkg.LastAliveTime, strconv.FormatInt(time, 10))
-	c.mux.Unlock()
-}
-
-func (c *Client) SetWillMessage(message string) {
-	c.mux.Lock()
-	c.session.Set(pkg.WillMessage, message)
-	c.mux.Unlock()
+// nolint:unused
+func (c *Client) retryPubJob(task *qos.PubTask) {
+	task.SetDuplicate()
+	c.writePacket(task.GetPacket())
 }

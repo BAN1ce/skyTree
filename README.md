@@ -7,10 +7,15 @@ A distributed message broker base on mqtt5.0 protocol.
 ## components
 
 ### Listener
+
 A distributed listener for client connect. support TCP and WebSocket protocol.
+
 ### Session
+
 A distributed session manager for client implement by Raft.
+
 ### Store
+
 Store publish messages. Any database implement store interface. support mysql,redis,leveldb and so on.
 
 ```puml
@@ -88,12 +93,13 @@ alt return zero message
     c ->> session : add once listen client's all topics's publish event
     c -->> c : block wait event trigger
     alt event trigger
-        c ->> store: read event's topic's message
+        c ->> store: read event's topic's message by message id
         c -->> c : cancel block wait
     end       
 end
 
 ```
+
 # Store Structure
 
 ```mermaid

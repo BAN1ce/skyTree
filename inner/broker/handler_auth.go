@@ -13,5 +13,4 @@ func NewAuthHandler() *AuthHandler {
 }
 
 func (a *AuthHandler) Handle(broker *Broker, client *client.Client, rawPacket *packets.ControlPacket) {
-	return
 }

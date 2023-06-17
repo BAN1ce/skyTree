@@ -3,9 +3,11 @@ package broker
 import (
 	"context"
 	"fmt"
+	"github.com/BAN1ce/skyTree/config"
 	"github.com/BAN1ce/skyTree/inner/broker/client"
 	"github.com/BAN1ce/skyTree/inner/broker/server"
 	"github.com/BAN1ce/skyTree/inner/broker/session"
+	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/BAN1ce/skyTree/pkg/middleware"
@@ -32,7 +34,6 @@ type brokerHandler interface {
 }
 type Broker struct {
 	ctx            context.Context
-	mux            sync.RWMutex
 	server         *server.Server
 	userAuth       middleware.UserAuth
 	subTree        pkg.SubTree
@@ -40,14 +41,16 @@ type Broker struct {
 	clientManager  *client.Manager
 	sessionManager *session.Manager
 	publishPool    *pool.PublishPool
+	publishRetry   facade.RetrySchedule
 	preMiddleware  map[byte][]middleware.PacketMiddleware
 	handlers       *Handlers
+	mux            sync.Mutex
 }
 
 func NewBroker(option ...Option) *Broker {
 	var (
 		ip     = `127.0.0.1`
-		port   = 9222
+		port   = config.GetServer().GetBrokerPort()
 		broker = &Broker{
 			publishPool:   pool.NewPublishPool(),
 			preMiddleware: make(map[byte][]middleware.PacketMiddleware),
@@ -80,21 +83,25 @@ func (b *Broker) Start(ctx context.Context) error {
 }
 
 func (b *Broker) acceptConn() {
+	var wg sync.WaitGroup
 	for {
 		conn, ok := b.server.Conn()
 		if !ok {
 			logger.Logger.Info("server closed")
 			return
 		}
-		newClient := client.NewClient(conn, client.WithStore(b.store), client.WithConfig(&client.Config{
+		newClient := client.NewClient(conn, client.WithStore(b.store), client.WithConfig(client.Config{
 			WindowSize:       10,
 			ReadStoreTimeout: 3 * time.Second,
 		}))
-		newClient.Run(b.ctx, b)
+		wg.Add(1)
+		go func(c *client.Client) {
+			c.Run(b.ctx, b)
+			logger.Logger.Info("client closed", "client id = ", c.ID, "client point = ", &c)
+			wg.Done()
+			b.DeleteClient(c.ID)
+		}(newClient)
 	}
-}
-func (b *Broker) ListenClientClose(client *client.Client) {
-	b.clientManager.DeleteClient(client)
 }
 
 // ------------------------------------ handle client MQTT Packet ------------------------------------//
@@ -104,6 +111,8 @@ func (b *Broker) HandlePacket(client *client.Client, packet *packets.ControlPack
 	if err := b.executePreMiddleware(client, packet); err != nil {
 		return
 	}
+	logger.Logger.Debug("handle packet type = ", packet.PacketType(), " client id = ", client.ID,
+		"packet", packet)
 	switch packet.FixedHeader.Type {
 	case packets.CONNECT:
 		b.handlers.Connect.Handle(b, client, packet)
@@ -149,5 +158,21 @@ func (b *Broker) writePacket(client *client.Client, packet packets.Packet) {
 	if err != nil {
 		logger.Logger.Error("write to client error = ", err.Error())
 		client.Close()
+	}
+}
+
+func (b *Broker) CreateClient(client *client.Client) {
+	b.mux.Lock()
+	b.clientManager.CreateClient(client)
+	b.mux.Unlock()
+
+}
+func (b *Broker) DeleteClient(clientID string) {
+	b.mux.Lock()
+	defer b.mux.Unlock()
+	if c, ok := b.clientManager.ReadClient(clientID); !ok {
+		return
+	} else {
+		b.clientManager.DeleteClient(c)
 	}
 }

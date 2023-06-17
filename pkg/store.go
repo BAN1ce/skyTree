@@ -2,7 +2,16 @@ package pkg
 
 import (
 	"context"
+	"github.com/BAN1ce/skyTree/pkg/pool"
+	"github.com/eclipse/paho.golang/packets"
 )
+
+type PublishElement interface {
+	GetTopic() string
+	GetResponseTopic() string
+	GetQos() int
+	GetContentType() string
+}
 
 type Store interface {
 	ClientMessageStore
@@ -11,8 +20,36 @@ type Store interface {
 
 type ClientMessageStore interface {
 	ReadTopicMessageByID(ctx context.Context, topic, id string, limit int) []Message
+	ReadTopicMessageAfterID(ctx context.Context, topic, id string, limit int) []Message
 }
 
 type PublishedStore interface {
 	CreatePacket(topic string, value []byte) (id string, err error)
+}
+
+// Encode publish packet to bytes
+func Encode(publish *packets.Publish) ([]byte, error) {
+	var (
+		bf = pool.ByteBufferPool.Get()
+	)
+	defer pool.ByteBufferPool.Put(bf)
+	if _, err := publish.WriteTo(bf); err != nil {
+		return nil, err
+	} else {
+		return bf.Bytes(), nil
+	}
+}
+
+// Decode bytes to publish packet
+func Decode(rawData []byte) (*packets.Publish, error) {
+	var (
+		bf = pool.ByteBufferPool.Get()
+	)
+	defer pool.ByteBufferPool.Put(bf)
+	bf.Write(rawData)
+	if ctl, err := packets.ReadPacket(bf); err != nil {
+		return nil, err
+	} else {
+		return ctl.Content.(*packets.Publish), nil
+	}
 }

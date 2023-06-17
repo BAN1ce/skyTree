@@ -17,6 +17,7 @@ func NewPacketIDFactory() *PacketIDFactory {
 	var (
 		id atomic.Uint32
 	)
+	// TODO: first packet id should be random
 	id.Store(uint32(GeneratePacketID()))
 	return &PacketIDFactory{
 		id: &id,

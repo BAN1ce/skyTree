@@ -3,60 +3,27 @@ package client
 import (
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/eclipse/paho.golang/packets"
-	"sync"
 )
-
-const (
-	eventTypeAddClient = iota
-	eventTypeRemClient
-)
-
-type event struct {
-	eventType int
-	client    *Client
-}
 
 type Manager struct {
-	mux     sync.RWMutex
 	clients map[string]*Client
-	event   chan *event
 }
 
 func NewManager() *Manager {
 	var (
 		c = &Manager{
 			clients: map[string]*Client{},
-			event:   make(chan *event, 100),
 		}
 	)
-	go c.listenClose()
 	return c
 }
 
 func (c *Manager) CreateClient(client *Client) {
-	c.event <- &event{
-		client:    client,
-		eventType: eventTypeAddClient,
-	}
+	c.createClient(client)
 }
 
 func (c *Manager) DeleteClient(client *Client) {
-	c.event <- &event{
-		client:    client,
-		eventType: eventTypeRemClient,
-	}
-}
-
-func (c *Manager) listenClose() {
-	// TODO: graceful shutdown
-	for event := range c.event {
-		switch event.eventType {
-		case eventTypeAddClient:
-			c.createClient(event.client)
-		case eventTypeRemClient:
-			c.deleteClient(event.client)
-		}
-	}
+	c.deleteClient(client)
 }
 
 func (c *Manager) createClient(client *Client) {
@@ -80,8 +47,6 @@ func (c *Manager) deleteClient(client *Client) {
 }
 
 func (c *Manager) ReadClient(clientID string) (*Client, bool) {
-	c.mux.RLock()
-	defer c.mux.RUnlock()
 	if client, ok := c.clients[clientID]; ok {
 		return client, true
 	}
@@ -94,13 +59,4 @@ func (c *Manager) Write(clientID string, packet packets.Packet) (int64, error) {
 	}
 	logger.Logger.Info("client not found = ", clientID)
 	return 0, nil
-}
-
-func (c *Manager) Info() *Info {
-	var (
-		info = Info{
-			Total: len(c.clients),
-		}
-	)
-	return &info
 }

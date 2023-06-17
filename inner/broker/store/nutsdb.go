@@ -57,10 +57,7 @@ func (s *NutsDB) ReadFromTimestamp(ctx context.Context, topic string, timestamp 
 		if err != nil {
 			return err
 		}
-		for _, v := range tmp {
-			messages = append(messages, pkg.NewPacket(v.Key(), topic, v.Value))
-		}
-
+		messages = nutsDBValuesBeMessages(tmp, topic)
 		return nil
 	})
 
@@ -74,6 +71,7 @@ func (s *NutsDB) ReadFromTimestamp(ctx context.Context, topic string, timestamp 
 	return messages
 
 }
+
 func (s *NutsDB) ReadTopicMessageByID(ctx context.Context, topic, id string, limit int) []pkg.Message {
 	var (
 		messages []pkg.Message
@@ -97,11 +95,9 @@ func (s *NutsDB) ReadTopicMessageByID(ctx context.Context, topic, id string, lim
 		}); err != nil {
 			return err
 		} else {
-			for _, v := range tmp {
-				messages = append(messages, pkg.NewPacket(v.Key(), topic, v.Value))
-			}
+			messages = nutsDBValuesBeMessages(tmp, topic)
+			return nil
 		}
-		return nil
 	})
 	if err != nil {
 		logger.Logger.Error("ReadFromID error: ", err, " topic: ", topic, " id: ", id)
@@ -110,6 +106,26 @@ func (s *NutsDB) ReadTopicMessageByID(ctx context.Context, topic, id string, lim
 }
 
 func (s *NutsDB) DeleteBeforeID(id string) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func nutsDBValuesBeMessages(values []*zset.SortedSetNode, topic string) []pkg.Message {
+	var (
+		messages []pkg.Message
+	)
+	for _, v := range values {
+		if pubPacket, err := pkg.Decode(v.Value); err == nil {
+			messages = append(messages, pkg.NewPacket(v.Key(), topic, pubPacket))
+		} else {
+			logger.Logger.Error("read from NutsDB decode error: ", err)
+		}
+
+	}
+	return messages
+}
+
+func (s *NutsDB) ReadTopicMessageAfterID(ctx context.Context, topic, id string, limit int) []pkg.Message {
 	// TODO implement me
 	panic("implement me")
 }

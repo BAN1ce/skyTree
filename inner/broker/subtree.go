@@ -43,6 +43,12 @@ func (s *subTree) Match(topic string) (clientIDQos map[string]int32) {
 	return
 }
 
+func (s *subTree) HasSub(topic string) bool {
+	s.mux.RLock()
+	defer s.mux.RUnlock()
+	return s.hashSub[topic] != nil
+}
+
 func (s *subTree) DeleteClient(clientID string) {
 	// TODO implement me
 	panic("implement me")

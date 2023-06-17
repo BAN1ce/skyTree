@@ -16,3 +16,7 @@ var (
 	ErrPasswordWrong          = errors.New("password wrong")
 	ErrAuthHandlerNotSet      = errors.New("auth handler not set")
 )
+
+var (
+	ErrInvalidQoS = errors.New("invalid qos")
+)

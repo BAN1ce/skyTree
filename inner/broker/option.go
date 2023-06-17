@@ -3,6 +3,7 @@ package broker
 import (
 	"github.com/BAN1ce/skyTree/inner/broker/client"
 	"github.com/BAN1ce/skyTree/inner/broker/session"
+	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/BAN1ce/skyTree/pkg/middleware"
 )
@@ -48,5 +49,11 @@ func WithSessionManager(manager *session.Manager) Option {
 func WithStore(store pkg.Store) Option {
 	return func(broker *Broker) {
 		broker.store = store
+	}
+}
+
+func WithPublishRetry(schedule facade.RetrySchedule) Option {
+	return func(broker *Broker) {
+		broker.publishRetry = schedule
 	}
 }

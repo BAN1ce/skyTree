@@ -24,14 +24,15 @@ func main() {
 		ctx, cancel = context.WithCancel(context.Background())
 	)
 	app.Start(ctx)
+	fmt.Println("Starting with version: ", app.Version())
 	fmt.Println(logo())
-	logger.Logger.Info("start app success")
+	fmt.Println("Wish you enjoy it!")
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	<-quit
 	cancel()
 	time.Sleep(1 * time.Second)
-	logger.Logger.Info("stop app success")
+	logger.Logger.Info("exist successfully")
 	os.Exit(0)
 }
 func logo() string {

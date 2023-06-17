@@ -7,6 +7,7 @@ import (
 
 func (b *Broker) initMiddleware() {
 	b.initConnectMiddleware()
+	b.initPublishMiddleware()
 }
 
 func (b *Broker) initConnectMiddleware() {

@@ -3,7 +3,6 @@ package broker
 import (
 	client2 "github.com/BAN1ce/skyTree/inner/broker/client"
 	session2 "github.com/BAN1ce/skyTree/inner/broker/session"
-	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/eclipse/paho.golang/packets"
 )
 
@@ -21,7 +20,7 @@ func (c *ConnectHandler) Handle(broker *Broker, client *client2.Client, packet *
 		session, sessionOk = broker.sessionManager.ReadSession(clientID)
 		conAck             = packets.NewControlPacket(packets.CONNACK).Content.(*packets.Connack)
 	)
-
+	// client.SetConnectProperties(packet.NewPahoConnectProperties(connectPacket.Properties))
 	// delete old session if clean start is true, and create new session for client
 	if connectPacket.CleanStart {
 		// clean session
@@ -42,14 +41,14 @@ func (c *ConnectHandler) Handle(broker *Broker, client *client2.Client, packet *
 	}
 
 	if connectPacket.WillFlag {
-		session.Set(pkg.WillFlag, pkg.WillFlagTrue)
+		// session.Set(pkg.WillFlag, pkg.WillFlagTrue)
 		switch connectPacket.WillQOS {
 		case 0x00:
-			session.Set(pkg.WillQos, pkg.WillQos0)
+			// session.Set(pkg.WillQos, pkg.WillQos0)
 		case 0x01:
-			session.Set(pkg.WillQos, pkg.WillQos1)
+			// session.Set(pkg.WillQos, pkg.WillQos1)
 		case 0x02:
-			session.Set(pkg.WillQos, pkg.WillQos2)
+			// session.Set(pkg.WillQos, pkg.WillQos2)
 		default:
 			conAck.ReasonCode = packets.ConnackProtocolError
 			broker.writePacket(client, conAck)
@@ -57,19 +56,18 @@ func (c *ConnectHandler) Handle(broker *Broker, client *client2.Client, packet *
 			return
 		}
 		if connectPacket.WillRetain {
-			session.Set(pkg.WillRetain, pkg.WillRetainTrue)
+			// session.Set(pkg.WillRetain, pkg.WillRetainTrue)
 		} else {
-			session.Set(pkg.WillRetain, pkg.WillRetainFalse)
+			// session.Set(pkg.WillRetain, pkg.WillRetainFalse)
 		}
 		// TODO: handle will message to store session
 	} else {
-		session.Set(pkg.WillFlag, pkg.WillFlagFalse)
+		// session.Set(pkg.WillFlag, pkg.WillFlagFalse)
 	}
 
 	conAck.ReasonCode = 0x00
 	client.SetID(clientID)
 	client.SetState(client2.ReceivedConnect)
-	broker.clientManager.CreateClient(client)
+	broker.CreateClient(client)
 	broker.writePacket(client, conAck)
-	client.RunSession()
 }
