@@ -1,7 +1,6 @@
 package session
 
 import (
-	"github.com/BAN1ce/skyTree/inner/broker/event"
 	"sync"
 )
 
@@ -20,8 +19,9 @@ func (s *MemorySession) Destroy() {
 	// TODO: GC session
 }
 
-func (s *MemorySession) OnceListenPublishEvent(clientID string, f func(topic, id string)) {
-	event.ListenPublishToClientEvent(clientID, f)
+func (s *MemorySession) OnceListenTopicStoreEvent(clientID string, f func(topic, id string)) {
+	// TODO: add store event listener
+	panic("implement me")
 }
 
 func (s *MemorySession) ReadSubTopics() map[string]int32 {

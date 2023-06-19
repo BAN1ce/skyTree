@@ -62,7 +62,7 @@ type Session interface {
 type SessionTopic interface {
 	ReleaseTopicSession(topic string)
 
-	OnceListenPublishEvent(topic string, f func(topic, id string))
+	OnceListenTopicStoreEvent(topic string, f func(topic, id string))
 
 	// CreateSubTopics create sub topic with QoS
 	CreateSubTopics(topic string, qos int32)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/BAN1ce/skyTree/config"
 	"github.com/BAN1ce/skyTree/inner/broker/client"
+	"github.com/BAN1ce/skyTree/inner/broker/event"
 	"github.com/BAN1ce/skyTree/inner/broker/server"
 	"github.com/BAN1ce/skyTree/inner/broker/session"
 	"github.com/BAN1ce/skyTree/inner/facade"
@@ -22,6 +23,7 @@ import (
 type Handlers struct {
 	Connect    brokerHandler
 	Publish    brokerHandler
+	PublishAck brokerHandler
 	Ping       brokerHandler
 	Sub        brokerHandler
 	UnSub      brokerHandler
@@ -115,15 +117,32 @@ func (b *Broker) HandlePacket(client *client.Client, packet *packets.ControlPack
 		"packet", packet)
 	switch packet.FixedHeader.Type {
 	case packets.CONNECT:
+		event.Event.Emit(event.Connect)
 		b.handlers.Connect.Handle(b, client, packet)
 	case packets.PUBLISH:
+		event.Event.Emit(event.ClientPublish)
 		b.handlers.Publish.Handle(b, client, packet)
+	case packets.PUBACK:
+		event.Event.Emit(event.ClientPublishAck)
+		b.handlers.PublishAck.Handle(b, client, packet)
 	case packets.SUBSCRIBE:
+		event.Event.Emit(event.Subscribe)
 		b.handlers.Sub.Handle(b, client, packet)
 	case packets.UNSUBSCRIBE:
+		event.Event.Emit(event.Unsubscribe)
 		b.handlers.UnSub.Handle(b, client, packet)
 	case packets.PINGREQ:
+		event.Event.Emit(event.Ping)
 		b.handlers.Ping.Handle(b, client, packet)
+	case packets.DISCONNECT:
+		event.Event.Emit(event.Disconnect)
+		b.handlers.Disconnect.Handle(b, client, packet)
+	case packets.AUTH:
+		event.Event.Emit(event.ClientAuth)
+		b.handlers.Auth.Handle(b, client, packet)
+
+	default:
+		logger.Logger.Error("unknown packet type = ", packet.FixedHeader.Type)
 	}
 }
 

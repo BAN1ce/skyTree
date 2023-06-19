@@ -23,7 +23,8 @@ type QoS1 struct {
 	windowSize int
 	store      pkg.ClientMessageStore
 	pkg.SessionTopic
-	writer Writer
+	lastMessageID string
+	writer        Writer
 }
 
 func NewQos1(topic string, windowSize int, store pkg.ClientMessageStore, sessionTopic pkg.SessionTopic, writer Writer) *QoS1 {
@@ -106,8 +107,8 @@ func (t *QoS1) storeReady() context.Context {
 	var (
 		ctx, cancel = context.WithCancel(t.ctx)
 	)
-	t.OnceListenPublishEvent(t.topic, func(topic, id string) {
-		if t.readMessageStoreByID(topic, id) > 0 {
+	t.OnceListenTopicStoreEvent(t.topic, func(topic, id string) {
+		if t.readMessageStoreByID(topic, t.lastMessageID) > 0 {
 			cancel()
 			return
 		}

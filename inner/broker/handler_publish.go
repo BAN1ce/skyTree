@@ -26,13 +26,13 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 		err         error
 		messageID   string
 	)
+	event.EmitClientPublishTopicEvent(topic, packet)
 	pubAck.PacketID = packet.PacketID
 	if len(subClients) == 0 {
 		pubAck.ReasonCode = packets.PubackNoMatchingSubscribers
 		broker.writePacket(client, pubAck)
 		return
 	}
-	event.EmitTopicPublishEvent(topic, packet)
 	if qos == pkg.QoS0 {
 		// FIXME: cluster event
 		return
@@ -43,23 +43,21 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 		return
 	}
 
-	if qos == pkg.QoS1 && len(subClients) != 0 {
+	if len(subClients) == 0 {
+		pubAck.ReasonCode = packets.PubackNoMatchingSubscribers
+		broker.writePacket(client, pubAck)
+		return
+	}
+	if qos == pkg.QoS1 || qos == pkg.QoS2 {
 		if encodedData, err = pkg.Encode(packet); err == nil {
 			messageID, err = broker.store.CreatePacket(topic, encodedData)
 			if err != nil {
 				logger.Logger.Error("create packet to store error = ", err.Error())
-			} else {
-				logger.Logger.Debug("create packet to store id = ", messageID, " topic = ", topic)
-				pubAck.ReasonCode = packets.PubackSuccess
-				emitPublishToClients(topic, messageID, subClients)
 			}
+			logger.Logger.Debug("create packet to store id = ", messageID, " topic = ", topic)
+			pubAck.ReasonCode = packets.PubackSuccess
+			event.Event.Emit(event.WithEventPrefix(event.StoreTopic, topic), topic, messageID)
 		}
 	}
 	broker.writePacket(client, pubAck)
-}
-
-func emitPublishToClients(topic, messageID string, clients map[string]int32) {
-	for clientID := range clients {
-		event.EmitPublishToClientEvent(clientID, topic, messageID)
-	}
 }

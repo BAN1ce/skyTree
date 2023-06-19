@@ -1,19 +1,34 @@
 package event
 
 import (
-	"fmt"
 	"github.com/kataras/go-events"
 )
 
 var (
-	event = events.New()
+	Event = events.New()
 )
 
 const (
-	EventPublish         = "event_publish"
-	eventPublishToClient = "event_publish_to_client"
+	Connect               = "event.connect"
+	Disconnect            = "event.disconnect"
+	Ping                  = "event.ping"
+	Pong                  = "event.pong"
+	Subscribe             = "event.subscribe"
+	Unsubscribe           = "event.unsubscribe"
+	ClientPublish         = "event.client.publish"
+	ClientPublishTopic    = "event.client.publish_topic"
+	BrokerPublish         = "event.broker.publish"
+	BrokerPublishToClient = "event.broker.publish_to_client"
+	ClientPublishAck      = "event.client.publish_ack"
+	BrokerPublishAck      = "event.broker.publish_ack"
+	ClientAuth            = "event.client.auth"
+	BrokerAuth            = "event.broker.auth"
 )
 
-func clientPublishToClientEventName(clientID string) events.EventName {
-	return events.EventName(fmt.Sprintf("%s_%s", eventPublishToClient, clientID))
+const (
+	StoreTopic = "event.store.topic"
+)
+
+func WithEventPrefix(name, s string) events.EventName {
+	return events.EventName(name + "." + s)
 }
