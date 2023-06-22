@@ -6,10 +6,10 @@ import (
 	"github.com/BAN1ce/skyTree/config"
 	"github.com/BAN1ce/skyTree/inner/api"
 	"github.com/BAN1ce/skyTree/inner/broker"
-	"github.com/BAN1ce/skyTree/inner/broker/client"
 	"github.com/BAN1ce/skyTree/inner/broker/session"
 	"github.com/BAN1ce/skyTree/inner/broker/store"
 	"github.com/BAN1ce/skyTree/inner/facade"
+	"github.com/BAN1ce/skyTree/inner/metric"
 	"github.com/BAN1ce/skyTree/inner/version"
 	"log"
 	"sync"
@@ -19,6 +19,7 @@ type component interface {
 	Start(ctx context.Context) error
 	Name() string
 }
+
 type App struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
@@ -29,8 +30,9 @@ type App struct {
 
 func NewApp() *App {
 	// todo: get config
+	metric.Init()
 	var (
-		clientManager        = client.NewManager()
+		clientManager        = broker.NewManager()
 		sessionManager       = session.NewSessionManager()
 		dbStore              = store.NewNutsDBStore()
 		publishRetrySchedule = facade.SinglePublishRetry()
@@ -56,29 +58,6 @@ func NewApp() *App {
 		app.brokerCore,
 		api.NewAPI(fmt.Sprintf(":%d", config.GetServer().GetPort()), api.WithClientManager(clientManager), api.WithStore(dbStore)),
 	}
-
-	// app.node = cluster.NewNode([]cluster.Component{
-	// 	cluster.WithHostConfig(config.NodeHostConfig{
-	// 		RTTMillisecond: 1000,
-	// 		RaftAddress:    "localhost:9526",
-	// 		NodeHostDir:    "./data",
-	// 	}),
-	// 	cluster.WithClusterConfig(config.Config{
-	// 		NodeID:             1,
-	// 		ClusterID:          1,
-	// 		ElectionRTT:        100,
-	// 		HeartbeatRTT:       1,
-	// 		CheckQuorum:        true,
-	// 		SnapshotEntries:    100000,
-	// 		CompactionOverhead: 5,
-	// 	}),
-	// 	cluster.WithJoin(false),
-	// 	cluster.WithInitMembers(map[uint64]string{
-	// 		1: "localhost:9526",
-	// 	}),
-	// 	// todo : should support config
-	// 	cluster.WithStateMachine(meta.NewCoreModel()),
-	// }...)
 	return app
 }
 

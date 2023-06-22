@@ -40,7 +40,7 @@ type Broker struct {
 	userAuth       middleware.UserAuth
 	subTree        pkg.SubTree
 	store          pkg.Store
-	clientManager  *client.Manager
+	clientManager  *Manager
 	sessionManager *session.Manager
 	publishPool    *pool.PublishPool
 	publishRetry   facade.RetrySchedule
@@ -95,7 +95,7 @@ func (b *Broker) acceptConn() {
 		newClient := client.NewClient(conn, client.WithStore(b.store), client.WithConfig(client.Config{
 			WindowSize:       10,
 			ReadStoreTimeout: 3 * time.Second,
-		}))
+		}), client.WithNotifyClose(b))
 		wg.Add(1)
 		go func(c *client.Client) {
 			c.Run(b.ctx, b)
@@ -120,7 +120,6 @@ func (b *Broker) HandlePacket(client *client.Client, packet *packets.ControlPack
 		event.Event.Emit(event.Connect)
 		b.handlers.Connect.Handle(b, client, packet)
 	case packets.PUBLISH:
-		event.Event.Emit(event.ClientPublish)
 		b.handlers.Publish.Handle(b, client, packet)
 	case packets.PUBACK:
 		event.Event.Emit(event.ClientPublishAck)
@@ -188,10 +187,12 @@ func (b *Broker) CreateClient(client *client.Client) {
 }
 func (b *Broker) DeleteClient(clientID string) {
 	b.mux.Lock()
-	defer b.mux.Unlock()
-	if c, ok := b.clientManager.ReadClient(clientID); !ok {
-		return
-	} else {
-		b.clientManager.DeleteClient(c)
-	}
+	b.clientManager.DeleteClient(clientID)
+	b.mux.Unlock()
+}
+
+func (b *Broker) NotifyClientClose(client *client.Client) {
+	b.mux.Lock()
+	b.clientManager.deleteClient(client)
+	b.mux.Unlock()
 }

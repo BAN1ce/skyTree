@@ -26,7 +26,8 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 		err         error
 		messageID   string
 	)
-	event.EmitClientPublishTopicEvent(topic, packet)
+	event.Event.Emit(event.ClientPublish, topic)
+	event.Event.Emit(event.ReceivedTopicPublishEventName(topic), topic, packet)
 	pubAck.PacketID = packet.PacketID
 	if len(subClients) == 0 {
 		pubAck.ReasonCode = packets.PubackNoMatchingSubscribers

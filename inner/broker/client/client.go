@@ -36,27 +36,27 @@ type Client struct {
 	handler         Handler
 	closeOnce       sync.Once
 	state           state.State
-	components      *Components
+	options         *Options
 	packetIDFactory PacketIDFactory
 	publishBucket   *util.Bucket
 	messages        chan pkg.Message
 	topics          *topic.Topics
 }
 
-func NewClient(conn net.Conn, option ...Component) *Client {
+func NewClient(conn net.Conn, option ...Option) *Client {
 	var (
 		c = &Client{
-			conn:       conn,
-			components: new(Components),
+			conn:    conn,
+			options: new(Options),
 		}
 	)
 
 	for _, o := range option {
-		o(c.components)
+		o(c.options)
 	}
 	c.packetIDFactory = util.NewPacketIDFactory()
-	c.messages = make(chan pkg.Message, c.components.cfg.WindowSize)
-	c.publishBucket = util.NewBucket(c.components.cfg.WindowSize)
+	c.messages = make(chan pkg.Message, c.options.cfg.WindowSize)
+	c.publishBucket = util.NewBucket(c.options.cfg.WindowSize)
 	return c
 }
 
@@ -118,9 +118,9 @@ func (c *Client) Close() {
 		if err := c.topics.Close(); err != nil {
 			logger.Logger.Warn("close topics error = ", err.Error())
 		}
+		c.options.notifyClose.NotifyClientClose(c)
 		// TODO: check will message
 	})
-
 }
 
 func (c *Client) SetID(id string) {
@@ -160,9 +160,9 @@ func (c *Client) SetSession(session pkg.Session) error {
 		err error
 	)
 	c.mux.Lock()
-	c.components.session = session
+	c.options.session = session
 	c.topics, err = topic.NewTopicWithSession(c.ctx, session,
-		topic.WithStore(c.components.Store),
+		topic.WithStore(c.options.Store),
 		topic.WithWriter(c),
 	)
 	c.mux.Unlock()
@@ -170,7 +170,7 @@ func (c *Client) SetSession(session pkg.Session) error {
 }
 
 func (c *Client) GetSession() pkg.Session {
-	return c.components.session
+	return c.options.session
 }
 
 func (c *Client) Qos1JobTimeout(job *qos.PubTask) {

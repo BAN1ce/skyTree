@@ -4,7 +4,7 @@ import (
 	"context"
 	_ "github.com/BAN1ce/skyTree/docs"
 	"github.com/BAN1ce/skyTree/inner/api/controller"
-	"github.com/BAN1ce/skyTree/inner/broker/client"
+	"github.com/BAN1ce/skyTree/inner/broker"
 	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/labstack/echo/v4"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -13,7 +13,7 @@ import (
 
 type Option func(*API)
 
-func WithClientManager(manager *client.Manager) Option {
+func WithClientManager(manager *broker.Manager) Option {
 	return func(api *API) {
 		api.manager = manager
 	}
@@ -28,7 +28,7 @@ type API struct {
 	addr       string
 	httpServer *echo.Echo
 	apiV1      *echo.Group
-	manager    *client.Manager
+	manager    *broker.Manager
 	store      pkg.Store
 }
 

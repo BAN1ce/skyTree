@@ -32,3 +32,7 @@ const (
 func WithEventPrefix(name, s string) events.EventName {
 	return events.EventName(name + "." + s)
 }
+
+func ReceivedTopicPublishEventName(topic string) events.EventName {
+	return WithEventPrefix(ClientPublishTopic, topic)
+}

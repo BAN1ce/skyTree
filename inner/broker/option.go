@@ -1,7 +1,6 @@
 package broker
 
 import (
-	"github.com/BAN1ce/skyTree/inner/broker/client"
 	"github.com/BAN1ce/skyTree/inner/broker/session"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/pkg"
@@ -16,7 +15,7 @@ func WithUserAuth(auth middleware.UserAuth) Option {
 	}
 }
 
-func WithClientManager(manager *client.Manager) Option {
+func WithClientManager(manager *Manager) Option {
 	return func(core *Broker) {
 		core.clientManager = manager
 	}

@@ -15,3 +15,8 @@ func (s *State) IsState(state uint64) bool {
 func (s *State) RemState(state uint64) {
 	s.s = s.s & (^state)
 }
+
+const (
+	// ConnectReceived is the state when a client has received a connect packet
+	ConnectReceived uint64 = uint64(1) << iota
+)

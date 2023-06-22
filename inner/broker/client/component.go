@@ -1,22 +1,34 @@
 package client
 
-import "github.com/BAN1ce/skyTree/pkg"
+import (
+	"github.com/BAN1ce/skyTree/pkg"
+)
 
-type Component func(*Components)
+type NotifyClientClose interface {
+	NotifyClientClose(c *Client)
+}
+type Option func(*Options)
 
-type Components struct {
-	Store   pkg.ClientMessageStore
-	session pkg.Session
-	cfg     Config
+type Options struct {
+	Store       pkg.ClientMessageStore
+	session     pkg.Session
+	cfg         Config
+	notifyClose NotifyClientClose
 }
 
-func WithStore(store pkg.ClientMessageStore) Component {
-	return func(options *Components) {
+func WithStore(store pkg.ClientMessageStore) Option {
+	return func(options *Options) {
 		options.Store = store
 	}
 }
-func WithConfig(cfg Config) Component {
-	return func(options *Components) {
+func WithConfig(cfg Config) Option {
+	return func(options *Options) {
 		options.cfg = cfg
+	}
+}
+
+func WithNotifyClose(notifyClose NotifyClientClose) Option {
+	return func(options *Options) {
+		options.notifyClose = notifyClose
 	}
 }

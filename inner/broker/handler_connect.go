@@ -3,6 +3,7 @@ package broker
 import (
 	client2 "github.com/BAN1ce/skyTree/inner/broker/client"
 	session2 "github.com/BAN1ce/skyTree/inner/broker/session"
+	"github.com/BAN1ce/skyTree/pkg/state"
 	"github.com/eclipse/paho.golang/packets"
 )
 
@@ -14,6 +15,12 @@ func NewConnectHandler() *ConnectHandler {
 }
 
 func (c *ConnectHandler) Handle(broker *Broker, client *client2.Client, packet *packets.ControlPacket) {
+	if client.IsState(state.ConnectReceived) {
+		// client already received connect packet
+		client.Close()
+	} else {
+		client.SetState(state.ConnectReceived)
+	}
 	var (
 		connectPacket, _   = packet.Content.(*packets.Connect)
 		clientID           = connectPacket.ClientID

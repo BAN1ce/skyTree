@@ -3,6 +3,7 @@ package topic
 import (
 	"context"
 	"github.com/BAN1ce/skyTree/inner/broker/client/qos"
+	"github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/BAN1ce/skyTree/pkg/errs"
@@ -87,7 +88,7 @@ func (t *Topics) CreateTopic(topicName string, qos pkg.QoS) error {
 }
 
 func (t *Topics) createQoS0Topic(topicName string) Topic {
-	return qos.NewQoS0(topicName, t.writer)
+	return qos.NewQoS0(topicName, t.writer, event.GloablEvent)
 }
 
 func (t *Topics) createQoS1Topic(topicName string, writer qos.Writer) Topic {
