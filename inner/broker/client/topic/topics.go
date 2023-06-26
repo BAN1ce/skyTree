@@ -2,13 +2,20 @@ package topic
 
 import (
 	"context"
-	"github.com/BAN1ce/skyTree/inner/broker/client/qos"
 	"github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/BAN1ce/skyTree/pkg/errs"
-	"io"
+	"github.com/eclipse/paho.golang/packets"
 )
+
+type PublishWriter interface {
+	// WritePacket writes the packet to the writer.
+	// Warning: packetID is original packetID, method should change it to the new one that does not used.
+	WritePacket(packet packets.Packet)
+
+	Close() error
+}
 
 type Option func(topics *Topics)
 
@@ -18,7 +25,7 @@ func WithStore(store pkg.ClientMessageStore) Option {
 	}
 }
 
-func WithWriter(writer io.Writer) Option {
+func WithWriter(writer PublishWriter) Option {
 	return func(topic *Topics) {
 		topic.writer = writer
 	}
@@ -35,7 +42,7 @@ type Topics struct {
 	topic      map[string]Topic
 	session    pkg.SessionTopic
 	store      pkg.ClientMessageStore
-	writer     io.Writer
+	writer     PublishWriter
 	windowSize int
 }
 
@@ -88,11 +95,11 @@ func (t *Topics) CreateTopic(topicName string, qos pkg.QoS) error {
 }
 
 func (t *Topics) createQoS0Topic(topicName string) Topic {
-	return qos.NewQoS0(topicName, t.writer, event.GloablEvent)
+	return NewQoS0(topicName, t.writer, event.GloablEvent)
 }
 
-func (t *Topics) createQoS1Topic(topicName string, writer qos.Writer) Topic {
-	return qos.NewQos1(topicName, 10, t.store, t.session, writer)
+func (t *Topics) createQoS1Topic(topicName string, writer PublishWriter) Topic {
+	return NewQos1(topicName, 10, t.store, t.session, writer)
 }
 
 func (t *Topics) createQoS2Topic(topicName string) Topic {

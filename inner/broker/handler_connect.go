@@ -3,8 +3,12 @@ package broker
 import (
 	client2 "github.com/BAN1ce/skyTree/inner/broker/client"
 	session2 "github.com/BAN1ce/skyTree/inner/broker/session"
+	"github.com/BAN1ce/skyTree/logger"
+	"github.com/BAN1ce/skyTree/pkg/errs"
+	packet2 "github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/state"
 	"github.com/eclipse/paho.golang/packets"
+	"github.com/google/uuid"
 )
 
 type ConnectHandler struct {
@@ -22,31 +26,26 @@ func (c *ConnectHandler) Handle(broker *Broker, client *client2.Client, packet *
 		client.SetState(state.ConnectReceived)
 	}
 	var (
-		connectPacket, _   = packet.Content.(*packets.Connect)
-		clientID           = connectPacket.ClientID
-		session, sessionOk = broker.sessionManager.ReadSession(clientID)
-		conAck             = packets.NewControlPacket(packets.CONNACK).Content.(*packets.Connack)
+		err              error
+		connectPacket, _ = packet.Content.(*packets.Connect)
+		conAck           = packets.NewControlPacket(packets.CONNACK).Content.(*packets.Connack)
 	)
-	// client.SetConnectProperties(packet.NewPahoConnectProperties(connectPacket.Properties))
-	// delete old session if clean start is true, and create new session for client
-	if connectPacket.CleanStart {
-		// clean session
-		broker.sessionManager.DeleteSession(clientID)
-		session = session2.NewSession()
-		client.SetSession(session)
-		broker.sessionManager.CreateSession(clientID, session)
-	} else if !sessionOk {
-		// create new session for client
-		session = session2.NewSession()
-		broker.sessionManager.CreateSession(clientID, session)
-		client.SetSession(session)
-		conAck.SessionPresent = true
-	} else {
-		// use old session
-		conAck.SessionPresent = true
-		client.SetSession(session)
+	// default ack code is success
+	conAck.ReasonCode = packets.ConnackSuccess
+	// parse connect properties and check
+	if err = c.handleConnectProperties(broker, client, connectPacket, conAck); err != nil {
+		broker.writePacket(client, conAck)
+		client.Close()
+		return
 	}
-
+	// handle clean start flag
+	if err = c.handleCleanStart(broker, client, *connectPacket, conAck); err != nil {
+		logger.Logger.Error("handle clean start error: ", err)
+		broker.writePacket(client, conAck)
+		client.Close()
+		return
+	}
+	// TODO: handle will message
 	if connectPacket.WillFlag {
 		// session.Set(pkg.WillFlag, pkg.WillFlagTrue)
 		switch connectPacket.WillQOS {
@@ -72,9 +71,74 @@ func (c *ConnectHandler) Handle(broker *Broker, client *client2.Client, packet *
 		// session.Set(pkg.WillFlag, pkg.WillFlagFalse)
 	}
 
-	conAck.ReasonCode = 0x00
-	client.SetID(clientID)
-	client.SetState(client2.ReceivedConnect)
+	// TODO: connect ack properties implementation
 	broker.CreateClient(client)
 	broker.writePacket(client, conAck)
+}
+
+func (c *ConnectHandler) handleConnectProperties(_ *Broker, client *client2.Client, packet *packets.Connect, conack *packets.Connack) error {
+	var connectProperties, err = packet2.PropertyToConnectProperties(packet.Properties)
+	if err != nil {
+		conack.ReasonCode = packets.ConnackProtocolError
+		return err
+	}
+	client.SetConnectProperties(connectProperties)
+	return nil
+}
+
+// handleCleanStart handle clean start flag, if clean start is true, delete session from session manager and create new session for client.
+// if clean start is false, read session from session manager, if session not exists, create new session for client, else use old session.
+// clean start is false, clientID must not be empty.
+func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client, packet packets.Connect, connack *packets.Connack) error {
+	var (
+		clientID   = packet.ClientID
+		cleanStart = packet.CleanStart
+		err        error
+	)
+	if clientID == "" && !cleanStart {
+		connack.ReasonCode = packets.ConnackInvalidClientID
+		return errs.ErrConnackInvalidClientID
+	} else if clientID == "" {
+		clientID = uuid.New().String()
+	}
+	if cleanStart {
+		// clean session
+		broker.sessionManager.DeleteSession(clientID)
+		session := session2.NewSession()
+		if err = client.SetSession(session); err != nil {
+			connack.ReasonCode = packets.ConnackServerUnavailable
+			return errs.ErrSetClientSession
+		}
+		broker.sessionManager.CreateSession(clientID, session)
+	} else {
+		session, exists := broker.sessionManager.ReadSession(clientID)
+		if !exists {
+			// create new session for client
+			session = session2.NewSession()
+			broker.sessionManager.CreateSession(clientID, session)
+		} else {
+			// use old session
+			if err = client.SetSession(session); err != nil {
+				connack.ReasonCode = packets.ConnackServerUnavailable
+				return errs.ErrSetClientSession
+			}
+			connack.SessionPresent = true
+		}
+	}
+	client.SetID(clientID)
+	return nil
+}
+
+func (c *ConnectHandler) handleWill(broker *Broker, client *client2.Client, packet packets.Connect) (byte, error) {
+	if !packet.WillFlag {
+		return packets.ConnackSuccess, nil
+	}
+	// var (
+	// 	willTopic      = packet.WillTopic
+	// 	willMessage    = packet.WillMessage
+	// 	willQos        = packet.WillQOS
+	// 	willRetain     = packet.WillRetain
+	// 	willProperties = packet2.PropertyToWillProperties(packet.Properties)
+	// )
+	return packets.ConnackSuccess, nil
 }

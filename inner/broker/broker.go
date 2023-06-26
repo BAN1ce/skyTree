@@ -42,7 +42,7 @@ type Broker struct {
 	store          pkg.Store
 	clientManager  *Manager
 	sessionManager *session.Manager
-	publishPool    *pool.PublishPool
+	publishPool    *pool.Publish
 	publishRetry   facade.RetrySchedule
 	preMiddleware  map[byte][]middleware.PacketMiddleware
 	handlers       *Handlers
@@ -54,7 +54,7 @@ func NewBroker(option ...Option) *Broker {
 		ip     = `127.0.0.1`
 		port   = config.GetServer().GetBrokerPort()
 		broker = &Broker{
-			publishPool:   pool.NewPublishPool(),
+			publishPool:   pool.NewPublish(),
 			preMiddleware: make(map[byte][]middleware.PacketMiddleware),
 		}
 	)

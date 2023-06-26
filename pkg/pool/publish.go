@@ -5,24 +5,42 @@ import (
 	"sync"
 )
 
-type PublishPool struct {
+var (
+	PublishPool = NewPublish()
+)
+
+type Publish struct {
 	sync.Pool
 }
 
-func (p *PublishPool) Get() *packets.Publish {
+func (p *Publish) Get() *packets.Publish {
 	return p.Pool.Get().(*packets.Publish)
 }
 
-func (p *PublishPool) Put(b *packets.Publish) {
+func (p *Publish) Put(b *packets.Publish) {
 	p.Pool.Put(b)
 }
 
-func NewPublishPool() *PublishPool {
-	return &PublishPool{
+func NewPublish() *Publish {
+	return &Publish{
 		sync.Pool{
 			New: func() interface{} {
 				return packets.NewControlPacket(packets.PUBLISH).Content.(*packets.Publish)
 			},
 		},
 	}
+}
+
+func CopyPublish(publish *packets.Publish) *packets.Publish {
+	var (
+		p = PublishPool.Get()
+	)
+	p.Duplicate = publish.Duplicate
+	p.QoS = publish.QoS
+	p.Retain = publish.Retain
+	p.Topic = publish.Topic
+	p.PacketID = publish.PacketID
+	p.Payload = publish.Payload
+	p.Properties = publish.Properties
+	return p
 }

@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"context"
+	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/eclipse/paho.golang/packets"
 )
@@ -19,8 +20,7 @@ type Store interface {
 }
 
 type ClientMessageStore interface {
-	ReadTopicMessageByID(ctx context.Context, topic, id string, limit int) []Message
-	ReadTopicMessageAfterID(ctx context.Context, topic, id string, limit int) []Message
+	ReadTopicMessagesByID(ctx context.Context, topic, id string, limit int, include bool) []packet.Publish
 }
 
 type PublishedStore interface {

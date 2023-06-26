@@ -26,6 +26,7 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 		err         error
 		messageID   string
 	)
+	// TODO: should emit all wildcard topic
 	event.Event.Emit(event.ClientPublish, topic)
 	event.Event.Emit(event.ReceivedTopicPublishEventName(topic), topic, packet)
 	pubAck.PacketID = packet.PacketID

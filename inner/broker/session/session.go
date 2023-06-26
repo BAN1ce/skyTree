@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"sync"
 )
 
@@ -19,7 +20,7 @@ func (s *MemorySession) Destroy() {
 	// TODO: GC session
 }
 
-func (s *MemorySession) OnceListenTopicStoreEvent(clientID string, f func(topic, id string)) {
+func (s *MemorySession) OnceListenTopicStoreEvent(ctx context.Context, clientID string, f func(topic, id string)) {
 	// TODO: add store event listener
 	panic("implement me")
 }
@@ -80,4 +81,9 @@ func (s *MemorySession) ReleaseTopicSession(topic string) {
 func (s *MemorySession) ReadTopicUnAckMessageID(topic string) []string {
 	// TODO implement me
 	panic("implement me")
+}
+
+func (s *MemorySession) CreateWill(topic string, qos int32, retain bool, payload []byte, properties map[string]string) {
+	// TODO implement me
+
 }

@@ -2,10 +2,10 @@ package client
 
 import (
 	"context"
-	"github.com/BAN1ce/skyTree/inner/broker/client/qos"
 	"github.com/BAN1ce/skyTree/inner/broker/client/topic"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/BAN1ce/skyTree/pkg/state"
 	"github.com/BAN1ce/skyTree/pkg/util"
@@ -29,18 +29,19 @@ type Handler interface {
 }
 
 type Client struct {
-	ID              string
-	ctx             context.Context
-	mux             sync.RWMutex
-	conn            net.Conn
-	handler         Handler
-	closeOnce       sync.Once
-	state           state.State
-	options         *Options
-	packetIDFactory PacketIDFactory
-	publishBucket   *util.Bucket
-	messages        chan pkg.Message
-	topics          *topic.Topics
+	ID                string
+	connectProperties *packet.ConnectProperties
+	ctx               context.Context
+	mux               sync.RWMutex
+	conn              net.Conn
+	handler           Handler
+	closeOnce         sync.Once
+	state             state.State
+	options           *Options
+	packetIDFactory   PacketIDFactory
+	publishBucket     *util.Bucket
+	messages          chan pkg.Message
+	topics            *topic.Topics
 }
 
 func NewClient(conn net.Conn, option ...Option) *Client {
@@ -50,7 +51,6 @@ func NewClient(conn net.Conn, option ...Option) *Client {
 			options: new(Options),
 		}
 	)
-
 	for _, o := range option {
 		o(c.options)
 	}
@@ -101,15 +101,15 @@ func (c *Client) HandleSub(subscribe *packets.Subscribe) map[string]byte {
 func (c *Client) HandleUnSub(topicName string) {
 	c.mux.Lock()
 	defer c.mux.Unlock()
+	c.options.session.DeleteSubTopics(topicName)
 	c.topics.DeleteTopic(topicName)
-
 }
 
 func (c *Client) HandlePubAck(pubAck packets.Puback) {
 
 }
 
-func (c *Client) Close() {
+func (c *Client) Close() error {
 	c.closeOnce.Do(func() {
 		logger.Logger.Info("client close = ", c.ID)
 		if err := c.conn.Close(); err != nil {
@@ -121,6 +121,7 @@ func (c *Client) Close() {
 		c.options.notifyClose.NotifyClientClose(c)
 		// TODO: check will message
 	})
+	return nil
 }
 
 func (c *Client) SetID(id string) {
@@ -139,6 +140,11 @@ func (c *Client) writePacket(packet packets.Packet) {
 		prepareWriteSize int64
 		err              error
 	)
+	// publishAck, subscribeAck, unsubscribeAck should use the same packetID as the original packet
+	switch packet.(type) {
+	case *packets.Publish:
+		packet.(*packets.Publish).PacketID = c.packetIDFactory.Generate()
+	}
 	defer pool.ByteBufferPool.Put(buf)
 	if prepareWriteSize, err = packet.WriteTo(buf); err != nil {
 		logger.Logger.Info("write packet error = ", err.Error())
@@ -169,17 +175,12 @@ func (c *Client) SetSession(session pkg.Session) error {
 	return err
 }
 
-func (c *Client) GetSession() pkg.Session {
-	return c.options.session
+func (c *Client) SetWill() {
+
 }
 
-func (c *Client) Qos1JobTimeout(job *qos.PubTask) {
-	c.Close()
-	// TODO: store unAck message's id to session
-}
-
-// nolint:unused
-func (c *Client) retryPubJob(task *qos.PubTask) {
-	task.SetDuplicate()
-	c.writePacket(task.GetPacket())
+func (c *Client) SetConnectProperties(properties *packet.ConnectProperties) {
+	c.mux.Lock()
+	c.connectProperties = properties
+	c.mux.Unlock()
 }

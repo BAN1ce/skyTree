@@ -12,14 +12,14 @@ func NewSchedule(ctx context.Context, options ...Option) *DelayTaskSchedule {
 				if t.Job == nil {
 					return
 				}
-				t.Job()
+				t.Job(t)
 				t.times++
 				t.usedTime += t.IntervalTime
 				t.IntervalTime *= 2
 				return
 			}
 			if t.TimeoutJob != nil {
-				t.TimeoutJob()
+				t.TimeoutJob(t)
 			}
 		}
 	}, options...)
@@ -32,8 +32,9 @@ type Task struct {
 	times        int
 	usedTime     time.Duration
 	Key          string
-	Job          func()
-	TimeoutJob   func()
+	Data         interface{}
+	Job          func(task *Task)
+	TimeoutJob   func(task *Task)
 }
 
 type Option func(*DelayTaskSchedule)

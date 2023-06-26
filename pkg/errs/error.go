@@ -10,11 +10,16 @@ var (
 )
 
 var (
-	ErrorInvalidPacket        = errors.New("invalid packet")
-	ErrConnectPacketDuplicate = errors.New("connect packet duplicate")
-	ErrProtocolNotSupport     = errors.New("protocol not support")
-	ErrPasswordWrong          = errors.New("password wrong")
-	ErrAuthHandlerNotSet      = errors.New("auth handler not set")
+	ErrInvalidPacket              = errors.New("invalid packet")
+	ErrInvalidRequestResponseInfo = errors.New("invalid request response info")
+	ErrInvalidRequestProblemInfo  = errors.New("invalid request problem info")
+	ErrConnackInvalidClientID     = errors.New("connack invalid client id")
+	ErrSetClientSession           = errors.New("set client session error")
+	ErrClientIDEmpty              = errors.New("client id empty")
+	ErrConnectPacketDuplicate     = errors.New("connect packet duplicate")
+	ErrProtocolNotSupport         = errors.New("protocol not support")
+	ErrPasswordWrong              = errors.New("password wrong")
+	ErrAuthHandlerNotSet          = errors.New("auth handler not set")
 )
 
 var (

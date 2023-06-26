@@ -1,5 +1,7 @@
 package packet
 
+import "github.com/eclipse/paho.golang/packets"
+
 const (
 	DisconnectNormalDisconnection                 = 0x00
 	DisconnectDisconnectWithWillMessage           = 0x04
@@ -53,13 +55,18 @@ const (
 )
 
 const (
-	PubackSuccess                     = 0x00
-	PubackNoMatchingSubscribers       = 0x10
-	PubackUnspecifiedError            = 0x80
-	PubackImplementationSpecificError = 0x83
-	PubackNotAuthorized               = 0x87
-	PubackTopicNameInvalid            = 0x90
-	PubackPacketIdentifierInUse       = 0x91
-	PubackQuotaExceeded               = 0x97
-	PubackPayloadFormatInvalid        = 0x99
+	PublishAckSuccess                     = 0x00
+	PublishAckNoMatchingSubscribers       = 0x10
+	PublishAckUnspecifiedError            = 0x80
+	PublishAckImplementationSpecificError = 0x83
+	PublishAckNotAuthorized               = 0x87
+	PublishAckTopicNameInvalid            = 0x90
+	PublishAckPacketIdentifierInUse       = 0x91
+	PublishAckQuotaExceeded               = 0x97
+	PublishAckPayloadFormatInvalid        = 0x99
 )
+
+type StorePublishPacket interface {
+	Encode() ([]byte, error)
+	Decode([]byte) (packets.Publish, error)
+}

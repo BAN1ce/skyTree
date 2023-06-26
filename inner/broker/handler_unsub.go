@@ -16,12 +16,11 @@ func (u *UnsubHandler) Handle(broker *Broker, client *client.Client, rawPacket *
 		packet   = rawPacket.Content.(*packets.Unsubscribe)
 		packetID = packet.PacketID
 		unsubAck = packets.NewControlPacket(packets.UNSUBACK).Content.(*packets.Unsuback)
-		session  = client.GetSession()
 	)
 	// TODO: check unsub result
 	broker.subTree.DeleteSub(client.ID, packet.Topics)
 	for _, topic := range packet.Topics {
-		session.DeleteSubTopics(topic)
+		client.HandleUnSub(topic)
 		unsubAck.Reasons = append(unsubAck.Reasons, 0x00)
 	}
 	unsubAck.PacketID = packetID

@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"context"
 	"time"
 )
 
@@ -62,8 +63,9 @@ type Session interface {
 type SessionTopic interface {
 	ReleaseTopicSession(topic string)
 
-	OnceListenTopicStoreEvent(topic string, f func(topic, id string))
+	OnceListenTopicStoreEvent(ctx context.Context, topic string, f func(topic, id string))
 
+	CreateWill(topic string, qos int32, retain bool, payload []byte, properties map[string]string)
 	// CreateSubTopics create sub topic with QoS
 	CreateSubTopics(topic string, qos int32)
 

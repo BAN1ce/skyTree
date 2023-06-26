@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/google/uuid"
 	"github.com/nutsdb/nutsdb"
 	"github.com/nutsdb/nutsdb/ds/zset"
@@ -46,9 +47,9 @@ func (s *NutsDB) CreatePacket(topic string, value []byte) (id string, err error)
 	return
 }
 
-func (s *NutsDB) ReadFromTimestamp(ctx context.Context, topic string, timestamp time.Time, limit int) []pkg.Message {
+func (s *NutsDB) ReadFromTimestamp(ctx context.Context, topic string, timestamp time.Time, limit int) []packet.Publish {
 	var (
-		messages []pkg.Message
+		messages []packet.Publish
 	)
 	err := s.db.View(func(tx *nutsdb.Tx) error {
 		tmp, err := tx.ZRangeByScore(topic, float64(timestamp.UnixNano()), math.MaxFloat64, &zset.GetByScoreRangeOptions{
@@ -72,9 +73,9 @@ func (s *NutsDB) ReadFromTimestamp(ctx context.Context, topic string, timestamp 
 
 }
 
-func (s *NutsDB) ReadTopicMessageByID(ctx context.Context, topic, id string, limit int) []pkg.Message {
+func (s *NutsDB) ReadTopicMessagesByID(ctx context.Context, topic, id string, limit int, include bool) []packet.Publish {
 	var (
-		messages []pkg.Message
+		messages []packet.Publish
 	)
 	err := s.db.View(func(tx *nutsdb.Tx) error {
 		score, err := tx.ZScore(topic, []byte(id))
@@ -95,6 +96,11 @@ func (s *NutsDB) ReadTopicMessageByID(ctx context.Context, topic, id string, lim
 		}); err != nil {
 			return err
 		} else {
+			if !include {
+				if len(tmp) > 0 {
+					tmp = tmp[1:]
+				}
+			}
 			messages = nutsDBValuesBeMessages(tmp, topic)
 			return nil
 		}
@@ -110,22 +116,20 @@ func (s *NutsDB) DeleteBeforeID(id string) {
 	panic("implement me")
 }
 
-func nutsDBValuesBeMessages(values []*zset.SortedSetNode, topic string) []pkg.Message {
+func nutsDBValuesBeMessages(values []*zset.SortedSetNode, topic string) []packet.Publish {
 	var (
-		messages []pkg.Message
+		messages []packet.Publish
 	)
 	for _, v := range values {
 		if pubPacket, err := pkg.Decode(v.Value); err == nil {
-			messages = append(messages, pkg.NewPacket(v.Key(), topic, pubPacket))
+			messages = append(messages, packet.Publish{
+				MessageID: v.Key(),
+				Packet:    pubPacket,
+			})
 		} else {
 			logger.Logger.Error("read from NutsDB decode error: ", err)
 		}
 
 	}
 	return messages
-}
-
-func (s *NutsDB) ReadTopicMessageAfterID(ctx context.Context, topic, id string, limit int) []pkg.Message {
-	// TODO implement me
-	panic("implement me")
 }
