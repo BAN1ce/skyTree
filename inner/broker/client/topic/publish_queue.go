@@ -37,7 +37,7 @@ func (q *PublishQueue) WritePacket(packet packet.Publish) {
 		retryKey:  retryKey,
 		messageID: packet.MessageID,
 	})
-	facade.GetPublishRetry().Create(&retry.Task{
+	err := facade.GetPublishRetry().Create(&retry.Task{
 		MaxTimes:     3,
 		MaxTime:      60 * time.Second,
 		IntervalTime: 10 * time.Second,
@@ -56,21 +56,32 @@ func (q *PublishQueue) WritePacket(packet packet.Publish) {
 			}
 		},
 	})
+	if err != nil {
+		logger.Logger.Error("create retry task error: ", err)
+	}
 
 }
 
 func (q *PublishQueue) Close() error {
+	for e := q.list.Front(); e != nil; e = e.Next() {
+		facade.GetPublishRetry().Delete(e.Value.(*queueElement).retryKey)
+		q.list.Remove(e)
+	}
 	return nil
 }
 
-func (q *PublishQueue) Ack(publishAck *packets.Puback) {
+func (q *PublishQueue) HandlePublishAck(publishAck *packets.Puback) bool {
+	var success bool
 	for e := q.list.Front(); e != nil; e = e.Next() {
 		if publishAck.PacketID == e.Value.(*queueElement).packet.PacketID {
+			logger.Logger.Debug("delete publish retry task: ", e.Value.(*queueElement).retryKey)
 			facade.GetPublishRetry().Delete(e.Value.(*queueElement).retryKey)
 			q.list.Remove(e)
+			success = true
 			break
 		}
 	}
+	return success
 }
 
 func (q *PublishQueue) GetUnAckMessageID() []string {

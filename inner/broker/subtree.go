@@ -28,7 +28,16 @@ func (s *subTree) CreateSub(clientID string, topics map[string]packets.SubOption
 
 func (s *subTree) DeleteSub(clientID string, topics []string) {
 	// TODO implement me
-	panic("implement me")
+	s.mux.Lock()
+	defer s.mux.Unlock()
+	for _, topic := range topics {
+		if s.hashSub[topic] != nil {
+			delete(s.hashSub[topic], clientID)
+			if len(s.hashSub[topic]) == 0 {
+				delete(s.hashSub, topic)
+			}
+		}
+	}
 }
 
 func (s *subTree) Match(topic string) (clientIDQos map[string]int32) {

@@ -19,4 +19,5 @@ func (s *State) RemState(state uint64) {
 const (
 	// ConnectReceived is the state when a client has received a connect packet
 	ConnectReceived uint64 = uint64(1) << iota
+	Closed
 )

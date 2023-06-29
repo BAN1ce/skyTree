@@ -57,19 +57,18 @@ func NewTopics(ctx context.Context, ops ...Option) *Topics {
 	return t
 }
 
-func NewTopicWithSession(ctx context.Context, session pkg.SessionTopic, op ...Option) (*Topics, error) {
+func NewTopicWithSession(ctx context.Context, session pkg.SessionTopic, op ...Option) *Topics {
 	t := NewTopics(ctx, op...)
 	t.session = session
 	for topic, qos := range session.ReadSubTopics() {
 		logger.Logger.Info("topic = ", topic, " qos = ", qos)
-		if err := t.CreateTopic(topic, pkg.Int32ToQoS(qos)); err != nil {
-			return nil, err
-		}
+		t.CreateTopic(topic, pkg.Int32ToQoS(qos))
+
 	}
-	return t, nil
+	return t
 }
 
-func (t *Topics) CreateTopic(topicName string, qos pkg.QoS) error {
+func (t *Topics) CreateTopic(topicName string, qos pkg.QoS) {
 	var (
 		topic Topic
 	)
@@ -82,24 +81,30 @@ func (t *Topics) CreateTopic(topicName string, qos pkg.QoS) error {
 	case pkg.QoS0:
 		topic = t.createQoS0Topic(topicName)
 	case pkg.QoS1:
-		panic("implement me")
+		topic = t.createQoS1Topic(topicName, t.writer)
 	case pkg.QoS2:
 		panic("implement me")
 	default:
-		return errs.ErrInvalidQoS
+		logger.Logger.Error("create topic error = ", errs.ErrInvalidQoS.Error())
+		return
 	}
 	t.session.CreateSubTopics(topicName, int32(qos))
 	t.topic[topicName] = topic
-	topic.Start(t.ctx)
-	return nil
+	go topic.Start(t.ctx)
+}
+
+func (t *Topics) HandlePublishAck(topic string, puback *packets.Puback) {
+	if topic, ok := t.topic[topic]; ok {
+		topic.HandlePublishAck(puback)
+	}
 }
 
 func (t *Topics) createQoS0Topic(topicName string) Topic {
-	return NewQoS0(topicName, t.writer, event.GloablEvent)
+	return NewQoS0(topicName, t.writer, event.GlobalEvent)
 }
 
 func (t *Topics) createQoS1Topic(topicName string, writer PublishWriter) Topic {
-	return NewQos1(topicName, 10, t.store, t.session, writer)
+	return NewQos1(topicName, 10, t.store, t.session, writer, event.GlobalEvent)
 }
 
 func (t *Topics) createQoS2Topic(topicName string) Topic {

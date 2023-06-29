@@ -12,6 +12,7 @@ var Logger = &logrus.Logger{
 	Formatter: &logrus.TextFormatter{
 		TimestampFormat: time.DateTime + ".000",
 		FullTimestamp:   true,
+		ForceColors:     true,
 	},
 	Level:      logrus.DebugLevel,
 	BufferPool: nil,

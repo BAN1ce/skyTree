@@ -64,6 +64,10 @@ func (s *subTopicsMeta) CreateTopicUnAckMessageID(topic string, messageID []stri
 	if topicMeta, ok := s.topics[topic]; !ok {
 		return
 	} else {
+		if topicMeta.unAckMessageID == nil {
+			topicMeta.unAckMessageID = make(map[string]struct{})
+
+		}
 		for _, id := range messageID {
 			topicMeta.unAckMessageID[id] = struct{}{}
 		}

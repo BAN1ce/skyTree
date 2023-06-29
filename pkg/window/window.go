@@ -8,10 +8,14 @@ type Windows struct {
 }
 
 func NewWindows(ctx context.Context, size int) *Windows {
-	return &Windows{
+	w := &Windows{
 		ctx:    ctx,
 		window: make(chan struct{}, size),
 	}
+	for i := 0; i < size; i++ {
+		w.Put()
+	}
+	return w
 }
 
 func (w *Windows) Get() {

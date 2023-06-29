@@ -23,6 +23,7 @@ func (s *MemorySession) Destroy() {
 func (s *MemorySession) OnceListenTopicStoreEvent(ctx context.Context, clientID string, f func(topic, id string)) {
 	// TODO: add store event listener
 	panic("implement me")
+
 }
 
 func (s *MemorySession) ReadSubTopics() map[string]int32 {
@@ -80,7 +81,7 @@ func (s *MemorySession) ReleaseTopicSession(topic string) {
 
 func (s *MemorySession) ReadTopicUnAckMessageID(topic string) []string {
 	// TODO implement me
-	panic("implement me")
+	return nil
 }
 
 func (s *MemorySession) CreateWill(topic string, qos int32, retain bool, payload []byte, properties map[string]string) {

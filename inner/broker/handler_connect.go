@@ -4,6 +4,7 @@ import (
 	client2 "github.com/BAN1ce/skyTree/inner/broker/client"
 	session2 "github.com/BAN1ce/skyTree/inner/broker/session"
 	"github.com/BAN1ce/skyTree/logger"
+	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/BAN1ce/skyTree/pkg/errs"
 	packet2 "github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/state"
@@ -94,6 +95,8 @@ func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client
 		clientID   = packet.ClientID
 		cleanStart = packet.CleanStart
 		err        error
+		session    pkg.Session
+		exists     bool
 	)
 	if clientID == "" && !cleanStart {
 		connack.ReasonCode = packets.ConnackInvalidClientID
@@ -104,26 +107,22 @@ func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client
 	if cleanStart {
 		// clean session
 		broker.sessionManager.DeleteSession(clientID)
-		session := session2.NewSession()
-		if err = client.SetSession(session); err != nil {
-			connack.ReasonCode = packets.ConnackServerUnavailable
-			return errs.ErrSetClientSession
-		}
+		session = session2.NewSession()
 		broker.sessionManager.CreateSession(clientID, session)
 	} else {
-		session, exists := broker.sessionManager.ReadSession(clientID)
+		session, exists = broker.sessionManager.ReadSession(clientID)
 		if !exists {
 			// create new session for client
 			session = session2.NewSession()
 			broker.sessionManager.CreateSession(clientID, session)
 		} else {
 			// use old session
-			if err = client.SetSession(session); err != nil {
-				connack.ReasonCode = packets.ConnackServerUnavailable
-				return errs.ErrSetClientSession
-			}
 			connack.SessionPresent = true
 		}
+	}
+	if err = client.SetSession(session); err != nil {
+		connack.ReasonCode = packets.ConnackServerUnavailable
+		return errs.ErrSetClientSession
 	}
 	client.SetID(clientID)
 	return nil

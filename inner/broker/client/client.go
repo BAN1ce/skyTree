@@ -5,6 +5,7 @@ import (
 	"github.com/BAN1ce/skyTree/inner/broker/client/topic"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/errs"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/BAN1ce/skyTree/pkg/state"
@@ -42,13 +43,15 @@ type Client struct {
 	publishBucket     *util.Bucket
 	messages          chan pkg.Message
 	topics            *topic.Topics
+	identifierIDTopic map[uint16]string
 }
 
 func NewClient(conn net.Conn, option ...Option) *Client {
 	var (
 		c = &Client{
-			conn:    conn,
-			options: new(Options),
+			conn:              conn,
+			options:           new(Options),
+			identifierIDTopic: map[uint16]string{},
 		}
 	)
 	for _, o := range option {
@@ -57,6 +60,7 @@ func NewClient(conn net.Conn, option ...Option) *Client {
 	c.packetIDFactory = util.NewPacketIDFactory()
 	c.messages = make(chan pkg.Message, c.options.cfg.WindowSize)
 	c.publishBucket = util.NewBucket(c.options.cfg.WindowSize)
+
 	return c
 }
 
@@ -75,7 +79,9 @@ func (c *Client) Run(ctx context.Context, handler Handler) {
 		controlPacket, err = packets.ReadPacket(c.conn)
 		if err != nil {
 			logger.Logger.Error("read controlPacket error = ", err.Error())
-			c.Close()
+			if err = c.Close(); err != nil {
+				logger.Logger.Warn("close client error = ", err.Error())
+			}
 			return
 		}
 		handler.HandlePacket(c, controlPacket)
@@ -89,11 +95,8 @@ func (c *Client) HandleSub(subscribe *packets.Subscribe) map[string]byte {
 	)
 	for t, v := range topics {
 		// FIXME qos 和其它配置
-		if err := c.topics.CreateTopic(t, v.QoS); err != nil {
-			failed[t] = 0x80
-		} else {
-			failed[t] = v.QoS
-		}
+		c.topics.CreateTopic(t, v.QoS)
+		failed[t] = v.QoS
 	}
 	return failed
 }
@@ -105,22 +108,32 @@ func (c *Client) HandleUnSub(topicName string) {
 	c.topics.DeleteTopic(topicName)
 }
 
-func (c *Client) HandlePubAck(pubAck packets.Puback) {
-
+func (c *Client) HandlePubAck(pubAck *packets.Puback) {
+	topicName := c.identifierIDTopic[pubAck.PacketID]
+	if len(topicName) == 0 {
+		logger.Logger.Warn("pubAck packetID not found = ", pubAck.PacketID)
+		return
+	}
+	c.topics.HandlePublishAck(topicName, pubAck)
 }
 
 func (c *Client) Close() error {
-	c.closeOnce.Do(func() {
-		logger.Logger.Info("client close = ", c.ID)
-		if err := c.conn.Close(); err != nil {
-			logger.Logger.Info("close client error = ", err.Error())
-		}
-		if err := c.topics.Close(); err != nil {
-			logger.Logger.Warn("close topics error = ", err.Error())
-		}
-		c.options.notifyClose.NotifyClientClose(c)
-		// TODO: check will message
-	})
+	c.mux.Lock()
+	if c.state.IsState(state.Closed) {
+		return errs.ErrClientClosed
+	} else {
+		c.state.SetState(state.Closed)
+	}
+	c.mux.Unlock()
+	logger.Logger.Info("client close = ", c.ID)
+	if err := c.conn.Close(); err != nil {
+		logger.Logger.Info("close client error = ", err.Error())
+	}
+	if err := c.topics.Close(); err != nil {
+		logger.Logger.Warn("close topics error = ", err.Error())
+	}
+	// TODO: check will message
+	c.options.notifyClose.NotifyClientClose(c)
 	return nil
 }
 
@@ -131,6 +144,7 @@ func (c *Client) SetID(id string) {
 }
 
 func (c *Client) WritePacket(packet packets.Packet) {
+	logger.Logger.Debug("write packet = ", packet, "clientID", c.ID)
 	c.writePacket(packet)
 }
 
@@ -141,9 +155,11 @@ func (c *Client) writePacket(packet packets.Packet) {
 		err              error
 	)
 	// publishAck, subscribeAck, unsubscribeAck should use the same packetID as the original packet
-	switch packet.(type) {
+
+	switch p := packet.(type) {
 	case *packets.Publish:
-		packet.(*packets.Publish).PacketID = c.packetIDFactory.Generate()
+		p.PacketID = c.packetIDFactory.Generate()
+		c.identifierIDTopic[p.PacketID] = p.Topic
 	}
 	defer pool.ByteBufferPool.Put(buf)
 	if prepareWriteSize, err = packet.WriteTo(buf); err != nil {
@@ -167,10 +183,7 @@ func (c *Client) SetSession(session pkg.Session) error {
 	)
 	c.mux.Lock()
 	c.options.session = session
-	c.topics, err = topic.NewTopicWithSession(c.ctx, session,
-		topic.WithStore(c.options.Store),
-		topic.WithWriter(c),
-	)
+	c.topics = topic.NewTopicWithSession(c.ctx, c.options.session, topic.WithStore(c.options.Store), topic.WithWriter(c))
 	c.mux.Unlock()
 	return err
 }

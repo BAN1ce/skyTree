@@ -40,6 +40,11 @@ func (t *QoS0) Start(ctx context.Context) {
 	}
 }
 
+func (t *QoS0) HandlePublishAck(puback *packets.Puback) {
+	// do nothing
+	return
+}
+
 // handler is the handler of the topic, it will be called when the event is triggered.
 func (t *QoS0) handler(i ...interface{}) {
 	if len(i) == 2 {

@@ -113,7 +113,7 @@ func (b *Broker) HandlePacket(client *client.Client, packet *packets.ControlPack
 	if err := b.executePreMiddleware(client, packet); err != nil {
 		return
 	}
-	logger.Logger.Debug("handle packet type = ", packet.PacketType(), " client id = ", client.ID,
+	logger.Logger.Debug("client  packet type = ", packet.PacketType(), " client id = ", client.ID,
 		"packet", packet)
 	switch packet.FixedHeader.Type {
 	case packets.CONNECT:
@@ -172,6 +172,7 @@ func (b *Broker) disconnectClient(code byte, client *client.Client) {
 // writePacket for collect all error log
 func (b *Broker) writePacket(client *client.Client, packet packets.Packet) {
 	// TODO: check client property setting
+	logger.Logger.Debug("broker write packet = ", packet, " client id = ", client.ID)
 	_, err := packet.WriteTo(client)
 	if err != nil {
 		logger.Logger.Error("write to client error = ", err.Error())

@@ -25,10 +25,6 @@ const (
 	BrokerAuth            = "event.broker.auth"
 )
 
-const (
-	StoreTopic = "event.store.topic"
-)
-
 func WithEventPrefix(name, s string) events.EventName {
 	return events.EventName(name + "." + s)
 }

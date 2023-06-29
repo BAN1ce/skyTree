@@ -46,6 +46,7 @@ func NewApp() *App {
 				broker.WithHandlers(&broker.Handlers{
 					Connect:    broker.NewConnectHandler(),
 					Publish:    broker.NewPublishHandler(),
+					PublishAck: broker.NewPublishAck(),
 					Ping:       broker.NewPingHandler(),
 					Sub:        broker.NewSubHandler(),
 					UnSub:      broker.NewUnsubHandler(),

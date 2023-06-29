@@ -20,6 +20,7 @@ var (
 	ErrProtocolNotSupport         = errors.New("protocol not support")
 	ErrPasswordWrong              = errors.New("password wrong")
 	ErrAuthHandlerNotSet          = errors.New("auth handler not set")
+	ErrClientClosed               = errors.New("client closed")
 )
 
 var (
