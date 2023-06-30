@@ -8,6 +8,7 @@ import (
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/window"
 	"github.com/eclipse/paho.golang/packets"
+	"go.uber.org/zap"
 	"time"
 )
 
@@ -60,24 +61,26 @@ func (t *QoS1) Start(ctx context.Context) {
 	// waiting for exit, prevent pushMessage use goroutine
 	<-ctx.Done()
 	if err := t.Close(); err != nil {
-		logger.Logger.Error("QoS1: close error = ", err)
+		logger.Logger.Warn("QoS1: close error = ", zap.Error(err))
 	}
 }
 
 func (t *QoS1) readSessionUnAck() {
 	messageID := t.SessionTopic.ReadTopicUnAckMessageID(t.meta.topic)
 	for _, id := range messageID {
-		msg := t.ClientMessageStore.ReadTopicMessagesByID(context.TODO(), t.meta.topic, id, 1, true)
-		if len(msg) == 0 {
-			logger.Logger.Warn("read session unAck publishChan id not found", "topic", t.meta.topic, "messageID", id)
+		msg, err := t.ClientMessageStore.ReadTopicMessagesByID(context.TODO(), t.meta.topic, id, 1, true)
+		if err != nil {
+			logger.Logger.Error("read session unAck publishChan message error", zap.Error(err), zap.String("topic", t.meta.topic), zap.String("messageID", id))
 			continue
 		}
-		t.publishChan <- msg[0]
+		for _, m := range msg {
+			t.publishChan <- m
+		}
 	}
 }
 
 func (t *QoS1) HandlePublishAck(puback *packets.Puback) {
-	if t.publishQueue.HandlePublishAck(puback){
+	if t.publishQueue.HandlePublishAck(puback) {
 		t.windows.Put()
 	}
 }
@@ -107,7 +110,7 @@ func (t *QoS1) pushMessage() {
 				topic, _ := i[0].(string)
 				id, _ := i[1].(string)
 				if topic != t.meta.topic {
-					logger.Logger.Warn("topic not match", "topic", topic, "expect", t.meta.topic)
+					logger.Logger.Warn("topic not match", zap.String("topic", topic), zap.String("expect", t.meta.topic))
 					return
 				}
 				t.readStore(ctx, id, true)
@@ -129,18 +132,26 @@ func (t *QoS1) readStoreToFillChannel() int {
 	lastAckMessageID, ok := t.SessionTopic.ReadTopicLastAckedMessageID(t.meta.topic)
 	// first time subscribe topic or session not acked publishChan id
 	if !ok {
-		logger.Logger.Info("session last acked publishChan id not found,maybe first time subscribe", "topic", t.meta.topic)
+		logger.Logger.Info("session last acked publishChan id not found, maybe first time subscribe", zap.String("topic", t.meta.topic))
 		return 0
 	}
 	return t.readStore(ctx, lastAckMessageID, false)
 }
 
 func (t *QoS1) readStore(ctx context.Context, startMessageID string, include bool) int {
-	var read int
-	for _, m := range t.ClientMessageStore.ReadTopicMessagesByID(ctx, t.meta.topic, startMessageID, t.meta.windowSize, include) {
+	var (
+		read         int
+		message, err = t.ClientMessageStore.ReadTopicMessagesByID(ctx, t.meta.topic, startMessageID, t.meta.windowSize, include)
+	)
+	if err != nil {
+		logger.Logger.Error("read topic message error", zap.Error(err), zap.String("topic", t.meta.topic), zap.String("messageID", startMessageID))
+		return 0
+	}
+	for _, m := range message {
 		select {
 		case t.publishChan <- m:
 			read++
+			t.lastMessageID = m.MessageID
 		default:
 		}
 	}

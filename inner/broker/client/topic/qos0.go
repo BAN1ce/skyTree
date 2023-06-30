@@ -5,6 +5,7 @@ import (
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/eclipse/paho.golang/packets"
+	"go.uber.org/zap"
 )
 
 // PublishListener is the interface of the publish event listener.
@@ -36,7 +37,7 @@ func (t *QoS0) Start(ctx context.Context) {
 	t.publishListener.CreatePublishEvent(t.topic, t.handler)
 	<-ctx.Done()
 	if err := t.Close(); err != nil {
-		logger.Logger.Error("QoS0: close error = ", err)
+		logger.Logger.Warn("QoS0: close error", zap.Error(err))
 	}
 }
 
@@ -66,7 +67,7 @@ func (t *QoS0) handler(i ...interface{}) {
 func (t *QoS0) publish(topic string, publish *packets.Publish) {
 	privatePublish := pool.CopyPublish(publish)
 	if topic != t.topic {
-		logger.Logger.Error("QoS0: topic error", topic, t.topic)
+		logger.Logger.Warn("QoS0: topic error", zap.String("topic", topic), zap.String("QoS0 topic", t.topic))
 		return
 	}
 	t.writer.WritePacket(privatePublish)

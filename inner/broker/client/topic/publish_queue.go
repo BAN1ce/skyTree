@@ -8,6 +8,7 @@ import (
 	"github.com/BAN1ce/skyTree/pkg/retry"
 	"github.com/eclipse/paho.golang/packets"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"time"
 )
 
@@ -31,13 +32,14 @@ func NewPublishQueue(writer PublishWriter) *PublishQueue {
 func (q *PublishQueue) WritePacket(packet packet.Publish) {
 	var (
 		retryKey = uuid.NewString()
+		err      error
 	)
 	q.list.PushBack(&queueElement{
 		packet:    packet.Packet,
 		retryKey:  retryKey,
 		messageID: packet.MessageID,
 	})
-	err := facade.GetPublishRetry().Create(&retry.Task{
+	err = facade.GetPublishRetry().Create(&retry.Task{
 		MaxTimes:     3,
 		MaxTime:      60 * time.Second,
 		IntervalTime: 10 * time.Second,
@@ -50,16 +52,16 @@ func (q *PublishQueue) WritePacket(packet packet.Publish) {
 			}
 		},
 		TimeoutJob: func(task *retry.Task) {
-			// TODO: close client
+			// close client
 			if err := q.writer.Close(); err != nil {
-				logger.Logger.Error("close client error: ", err)
+				logger.Logger.Warn("close client error", zap.Error(err))
 			}
 		},
 	})
+	// create retry task error
 	if err != nil {
-		logger.Logger.Error("create retry task error: ", err)
+		logger.Logger.Error("create retry task error: ", zap.Error(err))
 	}
-
 }
 
 func (q *PublishQueue) Close() error {
@@ -74,7 +76,7 @@ func (q *PublishQueue) HandlePublishAck(publishAck *packets.Puback) bool {
 	var success bool
 	for e := q.list.Front(); e != nil; e = e.Next() {
 		if publishAck.PacketID == e.Value.(*queueElement).packet.PacketID {
-			logger.Logger.Debug("delete publish retry task: ", e.Value.(*queueElement).retryKey)
+			logger.Logger.Debug("delete publish retry task: ", zap.String("retryKey", e.Value.(*queueElement).retryKey))
 			facade.GetPublishRetry().Delete(e.Value.(*queueElement).retryKey)
 			q.list.Remove(e)
 			success = true

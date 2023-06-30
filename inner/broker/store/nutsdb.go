@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/nutsdb/nutsdb"
 	"github.com/nutsdb/nutsdb/ds/zset"
+	"go.uber.org/zap"
 	"log"
 	"math"
 	"time"
@@ -47,11 +48,12 @@ func (s *NutsDB) CreatePacket(topic string, value []byte) (id string, err error)
 	return
 }
 
-func (s *NutsDB) ReadFromTimestamp(ctx context.Context, topic string, timestamp time.Time, limit int) []packet.Publish {
+func (s *NutsDB) ReadFromTimestamp(ctx context.Context, topic string, timestamp time.Time, limit int) ([]packet.Publish, error) {
 	var (
 		messages []packet.Publish
+		err      error
 	)
-	err := s.db.View(func(tx *nutsdb.Tx) error {
+	err = s.db.View(func(tx *nutsdb.Tx) error {
 		tmp, err := tx.ZRangeByScore(topic, float64(timestamp.UnixNano()), math.MaxFloat64, &zset.GetByScoreRangeOptions{
 			Limit: limit,
 		})
@@ -61,23 +63,16 @@ func (s *NutsDB) ReadFromTimestamp(ctx context.Context, topic string, timestamp 
 		messages = nutsDBValuesBeMessages(tmp, topic)
 		return nil
 	})
-
-	if err != nil {
-		logger.Logger.Error("ReadFromID error: ", err, " topic: ", topic, " timestamp: ", timestamp.UnixNano())
-	}
-	if len(messages) == 0 {
-		logger.Logger.Info("read from timestamp got nothing", " topic: ", topic, " timestamp: ", timestamp.UnixNano())
-
-	}
-	return messages
+	return messages, err
 
 }
 
-func (s *NutsDB) ReadTopicMessagesByID(ctx context.Context, topic, id string, limit int, include bool) []packet.Publish {
+func (s *NutsDB) ReadTopicMessagesByID(ctx context.Context, topic, id string, limit int, include bool) ([]packet.Publish, error) {
 	var (
 		messages []packet.Publish
+		err      error
 	)
-	err := s.db.View(func(tx *nutsdb.Tx) error {
+	err = s.db.View(func(tx *nutsdb.Tx) error {
 		score, err := tx.ZScore(topic, []byte(id))
 		if err != nil && !errors.Is(err, nutsdb.ErrKeyNotFound) {
 			return err
@@ -105,10 +100,7 @@ func (s *NutsDB) ReadTopicMessagesByID(ctx context.Context, topic, id string, li
 			return nil
 		}
 	})
-	if err != nil {
-		logger.Logger.Error("ReadFromID error: ", err, " topic: ", topic, " id: ", id)
-	}
-	return messages
+	return messages, err
 }
 
 func (s *NutsDB) DeleteBeforeID(id string) {
@@ -121,15 +113,15 @@ func nutsDBValuesBeMessages(values []*zset.SortedSetNode, topic string) []packet
 		messages []packet.Publish
 	)
 	for _, v := range values {
-		if pubPacket, err := pkg.Decode(v.Value); err == nil {
+		if pubPacket, err := pkg.Decode(v.Value); err != nil {
+			logger.Logger.Error("read from NutsDB decode error: ", zap.Error(err))
+			continue
+		} else {
 			messages = append(messages, packet.Publish{
 				MessageID: v.Key(),
 				Packet:    pubPacket,
 			})
-		} else {
-			logger.Logger.Error("read from NutsDB decode error: ", err)
 		}
-
 	}
 	return messages
 }

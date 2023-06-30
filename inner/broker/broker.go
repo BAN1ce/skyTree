@@ -14,6 +14,7 @@ import (
 	"github.com/BAN1ce/skyTree/pkg/middleware"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/eclipse/paho.golang/packets"
+	"go.uber.org/zap"
 	"log"
 	"net"
 	"sync"
@@ -99,7 +100,7 @@ func (b *Broker) acceptConn() {
 		wg.Add(1)
 		go func(c *client.Client) {
 			c.Run(b.ctx, b)
-			logger.Logger.Info("client closed", "client id = ", c.ID, "client point = ", &c)
+			logger.Logger.Info("client closed", zap.String("client", c.MetaString()))
 			wg.Done()
 			b.DeleteClient(c.ID)
 		}(newClient)
@@ -113,8 +114,7 @@ func (b *Broker) HandlePacket(client *client.Client, packet *packets.ControlPack
 	if err := b.executePreMiddleware(client, packet); err != nil {
 		return
 	}
-	logger.Logger.Debug("client  packet type = ", packet.PacketType(), " client id = ", client.ID,
-		"packet", packet)
+	logger.Logger.Debug("handle packet", zap.String("client", client.MetaString()), zap.Any("packet", packet))
 	switch packet.FixedHeader.Type {
 	case packets.CONNECT:
 		event.Event.Emit(event.Connect)
@@ -139,16 +139,15 @@ func (b *Broker) HandlePacket(client *client.Client, packet *packets.ControlPack
 	case packets.AUTH:
 		event.Event.Emit(event.ClientAuth)
 		b.handlers.Auth.Handle(b, client, packet)
-
 	default:
-		logger.Logger.Error("unknown packet type = ", packet.FixedHeader.Type)
+		logger.Logger.Warn("unknown packet type = ", zap.Uint8("type", packet.FixedHeader.Type))
 	}
 }
 
 func (b *Broker) executePreMiddleware(client *client.Client, packet *packets.ControlPacket) error {
 	for _, midHandle := range b.preMiddleware[packet.FixedHeader.Type] {
 		if err := midHandle.Handle(client, packet); err != nil {
-			logger.Logger.Error("handle connect error: ", err)
+			logger.Logger.Error("middleware handle error: ", zap.Error(err), zap.String("client", client.MetaString()))
 			client.Close()
 			return err
 		}
@@ -156,26 +155,12 @@ func (b *Broker) executePreMiddleware(client *client.Client, packet *packets.Con
 	return nil
 }
 
-// disconnectClient with code
-func (b *Broker) disconnectClient(code byte, client *client.Client) {
-	var (
-		disconnect = packets.NewControlPacket(packets.DISCONNECT).Content.(*packets.Disconnect)
-	)
-	disconnect.ReasonCode = code
-	if _, err := disconnect.WriteTo(client); err != nil {
-		logger.Logger.Error("write to client error = ", err.Error())
-		client.Close()
-	}
-}
-
 // ----------------------------------------- support ---------------------------------------------------//
 // writePacket for collect all error log
 func (b *Broker) writePacket(client *client.Client, packet packets.Packet) {
-	// TODO: check client property setting
-	logger.Logger.Debug("broker write packet = ", packet, " client id = ", client.ID)
 	_, err := packet.WriteTo(client)
 	if err != nil {
-		logger.Logger.Error("write to client error = ", err.Error())
+		logger.Logger.Info("write to client error = ", zap.Error(err), zap.String("client", client.MetaString()))
 		client.Close()
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/BAN1ce/skyTree/inner/broker/server/tcp"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/errs"
+	"go.uber.org/zap"
 	"net"
 	"sync"
 	"time"
@@ -51,19 +52,20 @@ func (s *Server) Start() error {
 		go func(l Listener) {
 			defer s.wg.Done()
 			if err := l.Listen(); err != nil {
-				logger.Logger.Fatalln("listen error = ", err.Error())
+				logger.Logger.Fatal("server listen failed ", zap.Error(err))
 			}
-			logger.Logger.Info("listen success = ", l.Name())
+			logger.Logger.Info("listen success", zap.String("Listener", l.Name()))
 			for {
 				if con, err := l.Accept(); err != nil {
-					logger.Logger.Error("accept error = ", err.Error())
+					// TODO: graceful shutdown should not output error loggers
+					logger.Logger.Error("accept error", zap.Error(err))
+					logger.Logger.Info("listener close", zap.String("Listener", l.Name()))
 					return
 				} else {
-					logger.Logger.Debug("accept success = ", con.RemoteAddr().String())
+					logger.Logger.Debug("accept success")
 					s.conn <- con
 				}
 			}
-			logger.Logger.WithField("Listener", l.Name()).Info("listen close")
 		}(l)
 	}
 	s.started = true

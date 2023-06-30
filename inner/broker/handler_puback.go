@@ -4,6 +4,7 @@ import (
 	"github.com/BAN1ce/skyTree/inner/broker/client"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/eclipse/paho.golang/packets"
+	"go.uber.org/zap"
 )
 
 type PubAck struct {
@@ -20,6 +21,7 @@ func (a *PubAck) Handle(broker *Broker, client *client.Client, rawPacket *packet
 	if packet.ReasonCode == packets.PubackSuccess {
 		client.HandlePubAck(packet)
 	} else {
-		logger.Logger.Info("publish ack reason code = ", packet.ReasonCode, " packet id = ", packet.PacketID, " client id = ", client.ID)
+		logger.Logger.Info("publish ack reason not success", zap.String("client", client.MetaString()),
+			zap.Uint8("reason", packet.ReasonCode), zap.Uint16("packetID", packet.PacketID))
 	}
 }

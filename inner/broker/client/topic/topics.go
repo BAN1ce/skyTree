@@ -5,8 +5,8 @@ import (
 	"github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
-	"github.com/BAN1ce/skyTree/pkg/errs"
 	"github.com/eclipse/paho.golang/packets"
+	"go.uber.org/zap"
 )
 
 type PublishWriter interface {
@@ -14,6 +14,7 @@ type PublishWriter interface {
 	// Warning: packetID is original packetID, method should change it to the new one that does not used.
 	WritePacket(packet packets.Packet)
 
+	GetID() string
 	Close() error
 }
 
@@ -61,7 +62,7 @@ func NewTopicWithSession(ctx context.Context, session pkg.SessionTopic, op ...Op
 	t := NewTopics(ctx, op...)
 	t.session = session
 	for topic, qos := range session.ReadSubTopics() {
-		logger.Logger.Info("topic = ", topic, " qos = ", qos)
+		logger.Logger.Debug("read topic from session = ", zap.String("topic", topic), zap.Int32("qos", qos))
 		t.CreateTopic(topic, pkg.Int32ToQoS(qos))
 
 	}
@@ -74,7 +75,7 @@ func (t *Topics) CreateTopic(topicName string, qos pkg.QoS) {
 	)
 	if t, ok := t.topic[topicName]; ok {
 		if err := t.Close(); err != nil {
-			logger.Logger.Info("close topic error = ", err.Error())
+			logger.Logger.Warn("close topic error = ", zap.Error(err))
 		}
 	}
 	switch qos {
@@ -85,7 +86,7 @@ func (t *Topics) CreateTopic(topicName string, qos pkg.QoS) {
 	case pkg.QoS2:
 		panic("implement me")
 	default:
-		logger.Logger.Error("create topic error = ", errs.ErrInvalidQoS.Error())
+		logger.Logger.Warn("create topic with wrong QoS ", zap.Uint8("qos", uint8(qos)))
 		return
 	}
 	t.session.CreateSubTopics(topicName, int32(qos))
@@ -114,17 +115,19 @@ func (t *Topics) createQoS2Topic(topicName string) Topic {
 func (t *Topics) DeleteTopic(topicName string) {
 	if _, ok := t.topic[topicName]; ok {
 		if err := t.topic[topicName].Close(); err != nil {
-			logger.Logger.Error("release topic error = ", err.Error())
+			logger.Logger.Warn("topics close topic failed", zap.Error(err), zap.String("topic", topicName))
 		}
 		delete(t.topic, topicName)
 	}
 }
 
 func (t *Topics) Close() error {
-	for _, topic := range t.topic {
-		if err := topic.Close(); err != nil {
-			logger.Logger.Error("close topic error = ", err.Error())
-		}
+	// for no sub client
+	if t == nil {
+		return nil
+	}
+	for topicName := range t.topic {
+		t.DeleteTopic(topicName)
 	}
 	return nil
 }

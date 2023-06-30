@@ -10,6 +10,7 @@ import (
 	"github.com/BAN1ce/skyTree/pkg/state"
 	"github.com/eclipse/paho.golang/packets"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 type ConnectHandler struct {
@@ -41,7 +42,7 @@ func (c *ConnectHandler) Handle(broker *Broker, client *client2.Client, packet *
 	}
 	// handle clean start flag
 	if err = c.handleCleanStart(broker, client, *connectPacket, conAck); err != nil {
-		logger.Logger.Error("handle clean start error: ", err)
+		logger.Logger.Warn("handle clean start error: ", zap.Error(err), zap.String("client", client.MetaString()))
 		broker.writePacket(client, conAck)
 		client.Close()
 		return

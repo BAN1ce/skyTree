@@ -7,6 +7,7 @@ import (
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/eclipse/paho.golang/packets"
+	"go.uber.org/zap"
 )
 
 type PublishHandler struct {
@@ -48,11 +49,14 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 	if qos == pkg.QoS1 || qos == pkg.QoS2 {
 		if encodedData, err = pkg.Encode(packet); err == nil {
 			messageID, err = broker.store.CreatePacket(topic, encodedData)
-			event2.GlobalEvent.EmitStoreMessage(topic, messageID)
 			if err != nil {
-				logger.Logger.Error("create packet to store error = ", err.Error())
+				logger.Logger.Error("create packet to store error = ", zap.Error(err), zap.String("topic", topic), zap.String("client", client.MetaString()))
+			} else {
+				logger.Logger.Debug("create packet to store success", zap.String("topic", topic), zap.String("clientID", client.GetID()),
+					zap.String("messageID", messageID))
+				event2.GlobalEvent.EmitStoreMessage(topic, messageID)
 			}
-			logger.Logger.Debug("create packet to store id = ", messageID, " topic = ", topic)
+			// TODO: store failed should use other reason code
 			pubAck.ReasonCode = packets.PubackSuccess
 		}
 	}

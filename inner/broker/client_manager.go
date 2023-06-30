@@ -4,6 +4,7 @@ import (
 	"github.com/BAN1ce/skyTree/inner/broker/client"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/eclipse/paho.golang/packets"
+	"go.uber.org/zap"
 )
 
 type Manager struct {
@@ -60,6 +61,6 @@ func (c *Manager) Write(clientID string, packet packets.Packet) (int64, error) {
 	if client, ok := c.clients[clientID]; ok {
 		return packet.WriteTo(client)
 	}
-	logger.Logger.Info("client not found = ", clientID)
+	logger.Logger.Info("client not found = ", zap.String("clientID", clientID))
 	return 0, nil
 }

@@ -5,13 +5,14 @@ import (
 	"github.com/BAN1ce/skyTree/inner/broker/client/topic"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
-	"github.com/BAN1ce/skyTree/pkg/errs"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/BAN1ce/skyTree/pkg/state"
 	"github.com/BAN1ce/skyTree/pkg/util"
 	"github.com/eclipse/paho.golang/packets"
+	"go.uber.org/zap"
 	"net"
+	"strings"
 	"sync"
 	"time"
 )
@@ -36,7 +37,6 @@ type Client struct {
 	mux               sync.RWMutex
 	conn              net.Conn
 	handler           Handler
-	closeOnce         sync.Once
 	state             state.State
 	options           *Options
 	packetIDFactory   PacketIDFactory
@@ -78,10 +78,8 @@ func (c *Client) Run(ctx context.Context, handler Handler) {
 	for {
 		controlPacket, err = packets.ReadPacket(c.conn)
 		if err != nil {
-			logger.Logger.Error("read controlPacket error = ", err.Error())
-			if err = c.Close(); err != nil {
-				logger.Logger.Warn("close client error = ", err.Error())
-			}
+			logger.Logger.Warn("read controlPacket error = ", zap.Error(err), zap.String("client", c.MetaString()))
+			c.closeHandleError()
 			return
 		}
 		handler.HandlePacket(c, controlPacket)
@@ -111,30 +109,26 @@ func (c *Client) HandleUnSub(topicName string) {
 func (c *Client) HandlePubAck(pubAck *packets.Puback) {
 	topicName := c.identifierIDTopic[pubAck.PacketID]
 	if len(topicName) == 0 {
-		logger.Logger.Warn("pubAck packetID not found = ", pubAck.PacketID)
+		logger.Logger.Warn("pubAck packetID not found topic", zap.String("client", c.MetaString()), zap.Uint16("packetID", pubAck.PacketID))
 		return
 	}
 	c.topics.HandlePublishAck(topicName, pubAck)
 }
 
 func (c *Client) Close() error {
-	c.mux.Lock()
-	if c.state.IsState(state.Closed) {
-		return errs.ErrClientClosed
-	} else {
-		c.state.SetState(state.Closed)
-	}
-	c.mux.Unlock()
-	logger.Logger.Info("client close = ", c.ID)
+	return c.conn.Close()
+}
+
+func (c *Client) closeHandleError() {
+	logger.Logger.Info("client close", zap.String("clientID", c.ID))
 	if err := c.conn.Close(); err != nil {
-		logger.Logger.Info("close client error = ", err.Error())
+		logger.Logger.Warn("close conn error", zap.Error(err), zap.String("client", c.MetaString()))
 	}
 	if err := c.topics.Close(); err != nil {
-		logger.Logger.Warn("close topics error = ", err.Error())
+		logger.Logger.Warn("close topics error", zap.Error(err), zap.String("client", c.MetaString()))
 	}
 	// TODO: check will message
 	c.options.notifyClose.NotifyClientClose(c)
-	return nil
 }
 
 func (c *Client) SetID(id string) {
@@ -144,7 +138,7 @@ func (c *Client) SetID(id string) {
 }
 
 func (c *Client) WritePacket(packet packets.Packet) {
-	logger.Logger.Debug("write packet = ", packet, "clientID", c.ID)
+	logger.Logger.Debug("write packet", zap.String("client", c.MetaString()), zap.Any("packet", packet))
 	c.writePacket(packet)
 }
 
@@ -153,6 +147,7 @@ func (c *Client) writePacket(packet packets.Packet) {
 		buf              = pool.ByteBufferPool.Get()
 		prepareWriteSize int64
 		err              error
+		topicName        string
 	)
 	// publishAck, subscribeAck, unsubscribeAck should use the same packetID as the original packet
 
@@ -160,20 +155,17 @@ func (c *Client) writePacket(packet packets.Packet) {
 	case *packets.Publish:
 		p.PacketID = c.packetIDFactory.Generate()
 		c.identifierIDTopic[p.PacketID] = p.Topic
+		topicName = p.Topic
 	}
 	defer pool.ByteBufferPool.Put(buf)
 	if prepareWriteSize, err = packet.WriteTo(buf); err != nil {
-		logger.Logger.Info("write packet error = ", err.Error())
-		c.Close()
+		logger.Logger.Info("write packet error", zap.Error(err), zap.String("client", c.MetaString()))
+		// TODO: check maximum packet size should close client ?
 	}
 	// TODO: check maximum packet size
-	if prepareWriteSize < 0 {
-		logger.Logger.Info("write packet error = ", err.Error())
-		c.Close()
-	}
 	if _, err = c.conn.Write(buf.Bytes()); err != nil {
-		logger.Logger.Info("write packet error = ", err.Error())
-		c.Close()
+		logger.Logger.Info("write packet error", zap.Error(err), zap.String("client", c.MetaString()), zap.Int64("prepareWriteSize", prepareWriteSize), zap.String("topicName", topicName))
+		// TODO: check maximum packet size should close client ?
 	}
 }
 
@@ -196,4 +188,20 @@ func (c *Client) SetConnectProperties(properties *packet.ConnectProperties) {
 	c.mux.Lock()
 	c.connectProperties = properties
 	c.mux.Unlock()
+}
+
+func (c *Client) GetID() string {
+	return c.ID
+}
+
+func (c *Client) MetaString() string {
+	var (
+		s strings.Builder
+	)
+	s.WriteString("clientID: ")
+	s.WriteString(c.ID)
+	s.WriteString(" ")
+	s.WriteString("remoteAddr: ")
+	s.WriteString(c.conn.RemoteAddr().String())
+	return s.String()
 }

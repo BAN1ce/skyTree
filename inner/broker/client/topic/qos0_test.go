@@ -20,6 +20,14 @@ func newMockTopicPublishListener() *mockTopicPublishListener {
 	}
 }
 
+func (m *mockPublishWriter) GetID() string {
+	return "mockID"
+}
+
+func (m *mockPublishWriter) Close() error {
+	return nil
+}
+
 func (m *mockTopicPublishListener) CreatePublishEvent(topic string, handler func(...interface{})) {
 	m.event[topic] = handler
 }

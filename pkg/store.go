@@ -20,7 +20,7 @@ type Store interface {
 }
 
 type ClientMessageStore interface {
-	ReadTopicMessagesByID(ctx context.Context, topic, id string, limit int, include bool) []packet.Publish
+	ReadTopicMessagesByID(ctx context.Context, topic, id string, limit int, include bool) ([]packet.Publish, error)
 }
 
 type PublishedStore interface {
