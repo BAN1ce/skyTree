@@ -9,6 +9,12 @@ import (
 	"go.uber.org/zap"
 )
 
+type Topic interface {
+	Start(ctx context.Context)
+	Close() error
+	HandlePublishAck(puback *packets.Puback)
+}
+
 type PublishWriter interface {
 	// WritePacket writes the packet to the writer.
 	// Warning: packetID is original packetID, method should change it to the new one that does not used.

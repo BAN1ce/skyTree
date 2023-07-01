@@ -18,14 +18,14 @@ type StoreEvent interface {
 }
 
 type QoS1 struct {
-	ctx           context.Context
-	cancel        context.CancelFunc
-	meta          *meta
-	windows       *window.Windows
-	publishChan   chan packet.Publish
-	publishQueue  *PublishQueue
-	lastMessageID string
-	writer        PublishWriter
+	ctx                context.Context
+	cancel             context.CancelFunc
+	meta               *meta
+	windows            *window.Windows
+	publishChan        chan *packet.PublishMessage
+	publishQueue       *PublishQueue
+	lastAckedMessageID string
+	writer             PublishWriter
 	pkg.ClientMessageStore
 	pkg.SessionTopic
 	StoreEvent
@@ -54,7 +54,7 @@ func (t *QoS1) Start(ctx context.Context) {
 		t.meta.windowSize = config.GetTopic().WindowSize
 	}
 	t.windows = window.NewWindows(ctx, t.meta.windowSize)
-	t.publishChan = make(chan packet.Publish, t.meta.windowSize)
+	t.publishChan = make(chan *packet.PublishMessage, t.meta.windowSize)
 	// read session unAck publishChan first
 	t.readSessionUnAck()
 	t.pushMessage()
@@ -62,6 +62,9 @@ func (t *QoS1) Start(ctx context.Context) {
 	<-ctx.Done()
 	if err := t.Close(); err != nil {
 		logger.Logger.Warn("QoS1: close error = ", zap.Error(err))
+	}
+	if err := t.afterClose(); err != nil {
+		logger.Logger.Warn("QoS1: after close error = ", zap.Error(err))
 	}
 }
 
@@ -74,7 +77,7 @@ func (t *QoS1) readSessionUnAck() {
 			continue
 		}
 		for _, m := range msg {
-			t.publishChan <- m
+			t.publishChan <- &m
 		}
 	}
 }
@@ -92,17 +95,24 @@ func (t *QoS1) pushMessage() {
 		select {
 		case <-t.ctx.Done():
 			return
-		case msg := <-t.publishChan:
+		case msg, ok := <-t.publishChan:
+			if !ok {
+				return
+			}
 			t.windows.Get()
 			t.writer.WritePacket(msg.Packet)
 			t.publishQueue.WritePacket(msg)
 		default:
-			if t.readStoreToFillChannel() > 0 {
-				continue
-			}
 			var (
+				// FIXME: context timeout config
 				ctx, cancel = context.WithTimeout(t.ctx, 10*time.Second)
 			)
+			if t.lastAckedMessageID != "" {
+				if t.readStore(context.TODO(), t.lastAckedMessageID, false) > 0 {
+					cancel()
+					continue
+				}
+			}
 			f = func(i ...interface{}) {
 				if len(i) != 2 {
 					return
@@ -123,21 +133,6 @@ func (t *QoS1) pushMessage() {
 	}
 }
 
-// readStoreToFillChannel read publishChan from store util fill the messages channel or all topics done
-func (t *QoS1) readStoreToFillChannel() int {
-	var (
-		ctx, cancel = context.WithTimeout(context.TODO(), config.GetStore().ReadTimeout)
-	)
-	defer cancel()
-	lastAckMessageID, ok := t.SessionTopic.ReadTopicLastAckedMessageID(t.meta.topic)
-	// first time subscribe topic or session not acked publishChan id
-	if !ok {
-		logger.Logger.Info("session last acked publishChan id not found, maybe first time subscribe", zap.String("topic", t.meta.topic))
-		return 0
-	}
-	return t.readStore(ctx, lastAckMessageID, false)
-}
-
 func (t *QoS1) readStore(ctx context.Context, startMessageID string, include bool) int {
 	var (
 		read         int
@@ -149,9 +144,9 @@ func (t *QoS1) readStore(ctx context.Context, startMessageID string, include boo
 	}
 	for _, m := range message {
 		select {
-		case t.publishChan <- m:
+		case t.publishChan <- &m:
 			read++
-			t.lastMessageID = m.MessageID
+			t.lastAckedMessageID = m.MessageID
 		default:
 		}
 	}
@@ -160,11 +155,11 @@ func (t *QoS1) readStore(ctx context.Context, startMessageID string, include boo
 
 func (t *QoS1) Close() error {
 	t.cancel()
-	// save unAck messageID to session when exit
-	t.SessionTopic.CreateTopicUnAckMessageID(t.meta.topic, t.publishQueue.GetUnAckMessageID())
-	return t.publishQueue.Close()
+	return nil
 }
 
-func (t *QoS1) GetQoS() pkg.QoS {
-	return pkg.QoS1
+func (t *QoS1) afterClose() error {
+	// save unAck messageID to session when exit
+	t.SessionTopic.SaveTopicUnAckMessageID(t.meta.topic, t.publishQueue.GetUnAckMessageID())
+	return t.publishQueue.Close()
 }

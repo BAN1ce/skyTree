@@ -4,7 +4,7 @@ import (
 	"github.com/eclipse/paho.golang/packets"
 )
 
-type Publish struct {
+type PublishMessage struct {
 	MessageID string
 	Packet    *packets.Publish
 }

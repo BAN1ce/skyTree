@@ -31,16 +31,12 @@ func NewPublish() *Publish {
 	}
 }
 
-func CopyPublish(publish *packets.Publish) *packets.Publish {
-	var (
-		p = PublishPool.Get()
-	)
-	p.Duplicate = publish.Duplicate
-	p.QoS = publish.QoS
-	p.Retain = publish.Retain
-	p.Topic = publish.Topic
-	p.PacketID = publish.PacketID
-	p.Payload = publish.Payload
-	p.Properties = publish.Properties
-	return p
+func CopyPublish(dest *packets.Publish, src *packets.Publish) {
+	dest.Duplicate = src.Duplicate
+	dest.QoS = src.QoS
+	dest.Retain = src.Retain
+	dest.Topic = src.Topic
+	dest.PacketID = src.PacketID
+	dest.Payload = src.Payload
+	dest.Properties = src.Properties
 }

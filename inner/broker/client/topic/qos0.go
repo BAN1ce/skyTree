@@ -39,6 +39,7 @@ func (t *QoS0) Start(ctx context.Context) {
 	if err := t.Close(); err != nil {
 		logger.Logger.Warn("QoS0: close error", zap.Error(err))
 	}
+	t.afterClose()
 }
 
 func (t *QoS0) HandlePublishAck(puback *packets.Puback) {
@@ -65,16 +66,20 @@ func (t *QoS0) handler(i ...interface{}) {
 
 // publish writes the publishPacket to the writer.
 func (t *QoS0) publish(topic string, publish *packets.Publish) {
-	privatePublish := pool.CopyPublish(publish)
+	var publishPacket = pool.PublishPool.Get()
+	defer pool.PublishPool.Put(publishPacket)
+	pool.CopyPublish(publishPacket, publish)
 	if topic != t.topic {
 		logger.Logger.Warn("QoS0: topic error", zap.String("topic", topic), zap.String("QoS0 topic", t.topic))
 		return
 	}
-	t.writer.WritePacket(privatePublish)
+	t.writer.WritePacket(publishPacket)
 }
 
 // Close closes the QoS0 topic and remove itself from the event.
 func (t *QoS0) Close() error {
-	t.publishListener.DeletePublishEvent(t.topic, t.handler)
 	return nil
+}
+func (t *QoS0) afterClose() {
+	t.publishListener.DeletePublishEvent(t.topic, t.handler)
 }

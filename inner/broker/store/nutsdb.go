@@ -48,9 +48,9 @@ func (s *NutsDB) CreatePacket(topic string, value []byte) (id string, err error)
 	return
 }
 
-func (s *NutsDB) ReadFromTimestamp(ctx context.Context, topic string, timestamp time.Time, limit int) ([]packet.Publish, error) {
+func (s *NutsDB) ReadFromTimestamp(ctx context.Context, topic string, timestamp time.Time, limit int) ([]packet.PublishMessage, error) {
 	var (
-		messages []packet.Publish
+		messages []packet.PublishMessage
 		err      error
 	)
 	err = s.db.View(func(tx *nutsdb.Tx) error {
@@ -67,9 +67,9 @@ func (s *NutsDB) ReadFromTimestamp(ctx context.Context, topic string, timestamp 
 
 }
 
-func (s *NutsDB) ReadTopicMessagesByID(ctx context.Context, topic, id string, limit int, include bool) ([]packet.Publish, error) {
+func (s *NutsDB) ReadTopicMessagesByID(ctx context.Context, topic, id string, limit int, include bool) ([]packet.PublishMessage, error) {
 	var (
-		messages []packet.Publish
+		messages []packet.PublishMessage
 		err      error
 	)
 	err = s.db.View(func(tx *nutsdb.Tx) error {
@@ -108,16 +108,16 @@ func (s *NutsDB) DeleteBeforeID(id string) {
 	panic("implement me")
 }
 
-func nutsDBValuesBeMessages(values []*zset.SortedSetNode, topic string) []packet.Publish {
+func nutsDBValuesBeMessages(values []*zset.SortedSetNode, topic string) []packet.PublishMessage {
 	var (
-		messages []packet.Publish
+		messages []packet.PublishMessage
 	)
 	for _, v := range values {
 		if pubPacket, err := pkg.Decode(v.Value); err != nil {
 			logger.Logger.Error("read from NutsDB decode error: ", zap.Error(err))
 			continue
 		} else {
-			messages = append(messages, packet.Publish{
+			messages = append(messages, packet.PublishMessage{
 				MessageID: v.Key(),
 				Packet:    pubPacket,
 			})

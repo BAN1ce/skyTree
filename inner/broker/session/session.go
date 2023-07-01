@@ -56,7 +56,7 @@ func (s *MemorySession) ReadTopicLastAckedMessageID(topic string) (string, bool)
 	return s.subTopicsMeta.ReadTopicLastAckedMessageID(topic)
 }
 
-func (s *MemorySession) CreateTopicUnAckMessageID(topic string, messageID []string) {
+func (s *MemorySession) SaveTopicUnAckMessageID(topic string, messageID []string) {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 	s.subTopicsMeta.CreateTopicUnAckMessageID(topic, messageID)

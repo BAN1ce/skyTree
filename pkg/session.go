@@ -69,8 +69,8 @@ type SessionTopic interface {
 	// CreateSubTopics create sub topic with QoS
 	CreateSubTopics(topic string, qos int32)
 
-	// CreateTopicUnAckMessageID ReadTopicUnAckMessageID read topic un ack message id when client connect again
-	CreateTopicUnAckMessageID(topic string, messageID []string)
+	// SaveTopicUnAckMessageID ReadTopicUnAckMessageID read topic un ack message id when client connect again
+	SaveTopicUnAckMessageID(topic string, messageID []string)
 
 	// UpdateTopicLastAckedMessageID update topic last acked message id
 	UpdateTopicLastAckedMessageID(topic string, messageID string)
