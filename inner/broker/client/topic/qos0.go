@@ -3,6 +3,7 @@ package topic
 import (
 	"context"
 	"github.com/BAN1ce/skyTree/logger"
+	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/eclipse/paho.golang/packets"
 	"go.uber.org/zap"
@@ -56,11 +57,17 @@ func (t *QoS0) handler(i ...interface{}) {
 			return
 		}
 		p, ok := i[1].(*packets.Publish)
-		if ok {
-			t.publish(topic, p)
-		} else {
+		if !ok {
 			logger.Logger.Error("ListenTopicPublishEvent: type error")
 		}
+		if topic != t.topic || p.Topic != t.topic {
+			logger.Logger.Error("ListenTopicPublishEvent: topic error", zap.String("topic", topic), zap.String("QoS0 topic", t.topic))
+			return
+		}
+		pub := copyPublish(p)
+		pub.QoS = pkg.QoS0
+		t.writer.WritePacket(pub)
+		pool.PublishPool.Put(pub)
 	}
 }
 
@@ -69,6 +76,7 @@ func (t *QoS0) publish(topic string, publish *packets.Publish) {
 	var publishPacket = pool.PublishPool.Get()
 	defer pool.PublishPool.Put(publishPacket)
 	pool.CopyPublish(publishPacket, publish)
+	publishPacket.QoS = pkg.QoS0
 	if topic != t.topic {
 		logger.Logger.Warn("QoS0: topic error", zap.String("topic", topic), zap.String("QoS0 topic", t.topic))
 		return

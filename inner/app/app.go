@@ -47,6 +47,7 @@ func NewApp() *App {
 					Connect:    broker.NewConnectHandler(),
 					Publish:    broker.NewPublishHandler(),
 					PublishAck: broker.NewPublishAck(),
+					PublishRel: broker.NewPublishRel(),
 					Ping:       broker.NewPingHandler(),
 					Sub:        broker.NewSubHandler(),
 					UnSub:      broker.NewUnsubHandler(),

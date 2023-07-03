@@ -57,10 +57,10 @@ func (c *Manager) ReadClient(clientID string) (*client.Client, bool) {
 	return nil, false
 }
 
-func (c *Manager) Write(clientID string, packet packets.Packet) (int64, error) {
-	if client, ok := c.clients[clientID]; ok {
-		return packet.WriteTo(client)
+func (c *Manager) Write(clientID string, packet packets.Packet) {
+	if client2, ok := c.clients[clientID]; ok {
+		client2.WritePacket(packet)
+	} else {
+		logger.Logger.Info("client not found = ", zap.String("clientID", clientID))
 	}
-	logger.Logger.Info("client not found = ", zap.String("clientID", clientID))
-	return 0, nil
 }

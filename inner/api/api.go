@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	_ "github.com/BAN1ce/skyTree/docs"
-	"github.com/BAN1ce/skyTree/inner/api/controller"
 	"github.com/BAN1ce/skyTree/inner/broker"
 	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/labstack/echo/v4"
@@ -61,18 +60,15 @@ func (a *API) route() {
 }
 
 func (a *API) client() {
-	var (
-		ctr = controller.NewClient(a.manager)
-	)
-	a.apiV1.GET("/clients", ctr.Get)
-	a.apiV1.DELETE("/clients/:id", ctr.Delete)
+	// var (
+	// 	ctr = client.NewController(a.manager)
+	// )
+	// a.apiV1.GET("/clients/:id", ctr.Info)
+	// a.apiV1.DELETE("/clients/:id", ctr.Delete)
 }
 
 func (a *API) message() {
-	var (
-		ctr = controller.NewMessage(a.store)
-	)
-	a.apiV1.GET("/message", ctr.Info)
+
 }
 func (a *API) Name() string {
 	return "api"

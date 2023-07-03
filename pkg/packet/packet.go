@@ -70,3 +70,14 @@ type StorePublishPacket interface {
 	Encode() ([]byte, error)
 	Decode([]byte) (packets.Publish, error)
 }
+
+func NewPublishAck() *packets.Puback {
+	return packets.NewControlPacket(packets.PUBACK).Content.(*packets.Puback)
+}
+func NewPublishRec() *packets.Pubrec {
+	return packets.NewControlPacket(packets.PUBREC).Content.(*packets.Pubrec)
+}
+
+func NewPublishComp() *packets.Pubcomp {
+	return packets.NewControlPacket(packets.PUBCOMP).Content.(*packets.Pubcomp)
+}

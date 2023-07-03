@@ -25,6 +25,7 @@ type Handlers struct {
 	Connect    brokerHandler
 	Publish    brokerHandler
 	PublishAck brokerHandler
+	PublishRel brokerHandler
 	Ping       brokerHandler
 	Sub        brokerHandler
 	UnSub      brokerHandler
@@ -124,6 +125,8 @@ func (b *Broker) HandlePacket(client *client.Client, packet *packets.ControlPack
 	case packets.PUBACK:
 		event.Event.Emit(event.ClientPublishAck)
 		b.handlers.PublishAck.Handle(b, client, packet)
+	case packets.PUBREL:
+		b.handlers.PublishRel.Handle(b, client, packet)
 	case packets.SUBSCRIBE:
 		event.Event.Emit(event.Subscribe)
 		b.handlers.Sub.Handle(b, client, packet)
@@ -158,11 +161,7 @@ func (b *Broker) executePreMiddleware(client *client.Client, packet *packets.Con
 // ----------------------------------------- support ---------------------------------------------------//
 // writePacket for collect all error log
 func (b *Broker) writePacket(client *client.Client, packet packets.Packet) {
-	_, err := packet.WriteTo(client)
-	if err != nil {
-		logger.Logger.Info("write to client error = ", zap.Error(err), zap.String("client", client.MetaString()))
-		client.Close()
-	}
+	client.WritePacket(packet)
 }
 
 func (b *Broker) CreateClient(client *client.Client) {

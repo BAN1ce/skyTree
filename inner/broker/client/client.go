@@ -31,7 +31,7 @@ type Handler interface {
 }
 
 type Client struct {
-	ID                string
+	ID                string `json:"id"`
 	connectProperties *packet.ConnectProperties
 	ctx               context.Context
 	mux               sync.RWMutex
@@ -44,6 +44,7 @@ type Client struct {
 	messages          chan pkg.Message
 	topics            *topic.Topics
 	identifierIDTopic map[uint16]string
+	QoS2              *HandleQoS2
 }
 
 func NewClient(conn net.Conn, option ...Option) *Client {
@@ -60,12 +61,9 @@ func NewClient(conn net.Conn, option ...Option) *Client {
 	c.packetIDFactory = util.NewPacketIDFactory()
 	c.messages = make(chan pkg.Message, c.options.cfg.WindowSize)
 	c.publishBucket = util.NewBucket(c.options.cfg.WindowSize)
+	c.QoS2 = NewHandleQoS2()
 
 	return c
-}
-
-func (c *Client) Write(data []byte) (int, error) {
-	return c.conn.Write(data)
 }
 
 func (c *Client) Run(ctx context.Context, handler Handler) {
@@ -78,7 +76,7 @@ func (c *Client) Run(ctx context.Context, handler Handler) {
 	for {
 		controlPacket, err = packets.ReadPacket(c.conn)
 		if err != nil {
-			logger.Logger.Warn("read controlPacket error = ", zap.Error(err), zap.String("client", c.MetaString()))
+			logger.Logger.Info("read controlPacket error = ", zap.Error(err), zap.String("client", c.MetaString()))
 			c.closeHandleError()
 			return
 		}
@@ -138,10 +136,16 @@ func (c *Client) SetID(id string) {
 }
 
 func (c *Client) WritePacket(packet packets.Packet) {
+	c.mux.Lock()
+	defer c.mux.Unlock()
 	logger.Logger.Debug("write packet", zap.String("client", c.MetaString()), zap.Any("packet", packet))
 	c.writePacket(packet)
 }
-
+func (c *Client) Write(data []byte) error {
+	// TODO: check size
+	_, err := c.conn.Write(data)
+	return err
+}
 func (c *Client) writePacket(packet packets.Packet) {
 	var (
 		buf              = pool.ByteBufferPool.Get()
@@ -170,14 +174,11 @@ func (c *Client) writePacket(packet packets.Packet) {
 }
 
 func (c *Client) SetSession(session pkg.Session) error {
-	var (
-		err error
-	)
 	c.mux.Lock()
 	c.options.session = session
 	c.topics = topic.NewTopicWithSession(c.ctx, c.options.session, topic.WithStore(c.options.Store), topic.WithWriter(c))
 	c.mux.Unlock()
-	return err
+	return nil
 }
 
 func (c *Client) SetWill() {

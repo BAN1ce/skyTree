@@ -19,6 +19,8 @@ func TestTopics_DeleteTopic(t1 *testing.T) {
 		}
 	)
 	defer ctl.Finish()
+	topic1.EXPECT().Close().Return(nil).Times(1)
+	topic2.EXPECT().Close().Return(nil).Times(1)
 	type fields struct {
 		ctx        context.Context
 		topic      map[string]Topic
@@ -75,15 +77,22 @@ func TestTopics_DeleteTopic(t1 *testing.T) {
 
 func TestTopics_Close(t1 *testing.T) {
 	var (
-		ctl    = gomock.NewController(t1)
-		topic1 = mock.NewMockTopic(ctl)
-		topic2 = mock.NewMockTopic(ctl)
+		ctl1   = gomock.NewController(t1)
+		ctl2   = gomock.NewController(t1)
+		topic1 = mock.NewMockTopic(ctl1)
+		topic2 = mock.NewMockTopic(ctl2)
 		topic  = map[string]Topic{
 			"topic1": topic1,
 			"topic2": topic2,
 		}
 	)
-	defer ctl.Finish()
+	defer func() {
+		ctl1.Finish()
+		ctl2.Finish()
+	}()
+	topic1.EXPECT().Close().Return(nil).Times(1)
+	topic2.EXPECT().Close().Return(nil).Times(1)
+
 	type fields struct {
 		ctx        context.Context
 		topic      map[string]Topic
@@ -122,6 +131,9 @@ func TestTopics_Close(t1 *testing.T) {
 			}
 			if err := t.Close(); (err != nil) != tt.wantErr {
 				t1.Errorf("Close() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if len(t.topic) != 0 {
+				t1.Errorf("Close() topic is not empty")
 			}
 		})
 	}

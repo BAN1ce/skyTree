@@ -100,6 +100,7 @@ func (t *QoS1) pushMessage() {
 				return
 			}
 			t.windows.Get()
+			msg.Packet.QoS = pkg.QoS1
 			t.writer.WritePacket(msg.Packet)
 			t.publishQueue.WritePacket(msg)
 		default:
