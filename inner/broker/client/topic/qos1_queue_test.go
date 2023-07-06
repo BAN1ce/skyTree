@@ -19,7 +19,7 @@ func TestPublishQueue_GetUnAckMessageID(t *testing.T) {
 		}
 	)
 	for _, id := range unAckMessageID {
-		testList.PushBack(&queueElement{
+		testList.PushBack(&publishTask{
 			messageID: id,
 		})
 	}

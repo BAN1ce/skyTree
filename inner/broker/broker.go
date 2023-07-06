@@ -8,6 +8,7 @@ import (
 	"github.com/BAN1ce/skyTree/inner/broker/event"
 	"github.com/BAN1ce/skyTree/inner/broker/server"
 	"github.com/BAN1ce/skyTree/inner/broker/session"
+	"github.com/BAN1ce/skyTree/inner/broker/store"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
@@ -41,7 +42,7 @@ type Broker struct {
 	server         *server.Server
 	userAuth       middleware.UserAuth
 	subTree        pkg.SubTree
-	store          pkg.Store
+	store          *store.Wrapper
 	clientManager  *Manager
 	sessionManager *session.Manager
 	publishPool    *pool.Publish

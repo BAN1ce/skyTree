@@ -91,3 +91,11 @@ func (t *QoS0) Close() error {
 func (t *QoS0) afterClose() {
 	t.publishListener.DeletePublishEvent(t.topic, t.handler)
 }
+
+func (t *QoS0) HandlePublishRec(pubrec *packets.Pubrec) {
+	return
+}
+
+func (t *QoS0) HandelPublishComp(pubcomp *packets.Pubcomp) {
+	return
+}

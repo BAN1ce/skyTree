@@ -13,17 +13,17 @@ import (
 )
 
 type PublishQueue struct {
-	list   *list.List // queueElement
+	list   *list.List // publishTask
 	writer PublishWriter
 }
 
 /**
- * queueElement is the element of the publishing queue.
+ * publishTask is the element of the publishing queue.
  * It contains the publishing packet, retry key and message id.
  * The retry key is used to retry the publishing packet.
  * The message id is stored in DB.
  */
-type queueElement struct {
+type publishTask struct {
 	packet    *packets.Publish
 	retryKey  string
 	messageID string
@@ -41,7 +41,7 @@ func (q *PublishQueue) WritePacket(packet *packet.PublishMessage) {
 	var (
 		retryKey = uuid.NewString()
 	)
-	q.list.PushBack(&queueElement{
+	q.list.PushBack(&publishTask{
 		packet:    packet.Packet,
 		retryKey:  retryKey,
 		messageID: packet.MessageID,
@@ -63,8 +63,8 @@ func (q *PublishQueue) Close() error {
 func (q *PublishQueue) HandlePublishAck(publishAck *packets.Puback) bool {
 	var success bool
 	for e := q.list.Front(); e != nil; e = e.Next() {
-		if publishAck.PacketID == e.Value.(*queueElement).packet.PacketID && publishAck.ReasonCode == packets.PubackSuccess {
-			logger.Logger.Debug("delete publish retry task: ", zap.String("retryKey", e.Value.(*queueElement).retryKey))
+		if publishAck.PacketID == e.Value.(*publishTask).packet.PacketID && publishAck.ReasonCode == packets.PubackSuccess {
+			logger.Logger.Debug("delete publish retry task: ", zap.String("retryKey", e.Value.(*publishTask).retryKey))
 			q.deleteElement(e)
 			success = true
 			break
@@ -77,13 +77,13 @@ func (q *PublishQueue) HandlePublishAck(publishAck *packets.Puback) bool {
 func (q *PublishQueue) GetUnAckMessageID() []string {
 	var messageIDs []string
 	for e := q.list.Front(); e != nil; e = e.Next() {
-		messageIDs = append(messageIDs, e.Value.(*queueElement).messageID)
+		messageIDs = append(messageIDs, e.Value.(*publishTask).messageID)
 	}
 	return messageIDs
 }
 
 func (q *PublishQueue) deleteElement(e *list.Element) {
-	facade.GetPublishRetry().Delete(e.Value.(*queueElement).retryKey)
+	facade.GetPublishRetry().Delete(e.Value.(*publishTask).retryKey)
 	q.list.Remove(e)
 }
 

@@ -3,7 +3,6 @@ package broker
 import (
 	"github.com/BAN1ce/skyTree/inner/broker/client"
 	"github.com/BAN1ce/skyTree/inner/broker/event"
-	event2 "github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
 	packet2 "github.com/BAN1ce/skyTree/pkg/packet"
@@ -41,10 +40,9 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 			broker.writePacket(client, pubAck)
 			return
 		}
-		if _, err = storePublishPacket(broker, client, packet); err != nil {
+		if _, err = broker.store.StorePublishPacket(packet); err != nil {
 			pubAck.ReasonCode = packets.PubackUnspecifiedError
 		} else {
-
 			pubAck.ReasonCode = packets.PubackSuccess
 		}
 		client.WritePacket(pubAck)
@@ -68,24 +66,4 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 		pubAck.ReasonCode = packets.PubackUnspecifiedError
 	}
 	broker.writePacket(client, pubAck)
-}
-
-func storePublishPacket(broker *Broker, client *client.Client, packet *packets.Publish) (string, error) {
-	var (
-		encodedData []byte
-		err         error
-		messageID   string
-		topic       = packet.Topic
-	)
-	if encodedData, err = pkg.Encode(packet); err == nil {
-		messageID, err = broker.store.CreatePacket(topic, encodedData)
-		if err != nil {
-			logger.Logger.Error("create packet to store error = ", zap.Error(err), zap.String("topic", topic), zap.String("client", client.MetaString()))
-		} else {
-			logger.Logger.Debug("create packet to store success", zap.String("topic", topic), zap.String("clientID", client.GetID()),
-				zap.String("messageID", messageID))
-			event2.GlobalEvent.EmitStoreMessage(topic, messageID)
-		}
-	}
-	return messageID, err
 }

@@ -39,7 +39,7 @@ func NewApp() *App {
 		app                  = &App{
 			brokerCore: broker.NewBroker(
 				broker.WithPublishRetry(publishRetrySchedule),
-				broker.WithStore(dbStore),
+				broker.WithStore(store.NewStoreWrapper(dbStore)),
 				broker.WithSessionManager(sessionManager),
 				broker.WithClientManager(clientManager),
 				broker.WithSubTree(broker.NewSubTree()),

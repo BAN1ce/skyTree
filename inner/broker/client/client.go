@@ -136,6 +136,9 @@ func (c *Client) SetID(id string) {
 }
 
 func (c *Client) WritePacket(packet packets.Packet) {
+	if packet == nil {
+		return
+	}
 	c.mux.Lock()
 	defer c.mux.Unlock()
 	logger.Logger.Debug("write packet", zap.String("client", c.MetaString()), zap.Any("packet", packet))

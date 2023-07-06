@@ -13,6 +13,8 @@ type Topic interface {
 	Start(ctx context.Context)
 	Close() error
 	HandlePublishAck(puback *packets.Puback)
+	HandlePublishRec(pubrec *packets.Pubrec)
+	HandelPublishComp(pubcomp *packets.Pubcomp)
 }
 
 type PublishWriter interface {
@@ -86,11 +88,14 @@ func (t *Topics) CreateTopic(topicName string, qos pkg.QoS) {
 	}
 	switch qos {
 	case pkg.QoS0:
+		logger.Logger.Debug("create topic with QoS0", zap.String("topic", topicName))
 		topic = t.createQoS0Topic(topicName)
 	case pkg.QoS1:
+		logger.Logger.Debug("create topic with QoS1", zap.String("topic", topicName))
 		topic = t.createQoS1Topic(topicName, t.writer)
 	case pkg.QoS2:
-		panic("implement me")
+		logger.Logger.Debug("create topic with QoS2", zap.String("topic", topicName))
+		topic = t.createQoS2Topic(topicName, t.writer)
 	default:
 		logger.Logger.Warn("create topic with wrong QoS ", zap.Uint8("qos", uint8(qos)))
 		return
@@ -114,8 +119,8 @@ func (t *Topics) createQoS1Topic(topicName string, writer PublishWriter) Topic {
 	return NewQos1(topicName, 10, t.store, t.session, writer, event.GlobalEvent)
 }
 
-func (t *Topics) createQoS2Topic(topicName string) Topic {
-	panic("implement me")
+func (t *Topics) createQoS2Topic(topicName string, writer PublishWriter) Topic {
+	return NewQos2(topicName, t.store, writer, event.GlobalEvent)
 }
 
 func (t *Topics) DeleteTopic(topicName string) {

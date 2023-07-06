@@ -6,7 +6,6 @@ import (
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/BAN1ce/skyTree/pkg/packet"
-	"github.com/BAN1ce/skyTree/pkg/window"
 	"github.com/eclipse/paho.golang/packets"
 	"go.uber.org/zap"
 	"time"
@@ -21,7 +20,6 @@ type QoS1 struct {
 	ctx                context.Context
 	cancel             context.CancelFunc
 	meta               *meta
-	windows            *window.Windows
 	publishChan        chan *packet.PublishMessage
 	publishQueue       *PublishQueue
 	lastAckedMessageID string
@@ -53,7 +51,6 @@ func (t *QoS1) Start(ctx context.Context) {
 	if t.meta.windowSize == 0 {
 		t.meta.windowSize = config.GetTopic().WindowSize
 	}
-	t.windows = window.NewWindows(ctx, t.meta.windowSize)
 	t.publishChan = make(chan *packet.PublishMessage, t.meta.windowSize)
 	// read session unAck publishChan first
 	t.readSessionUnAck()
@@ -84,7 +81,6 @@ func (t *QoS1) readSessionUnAck() {
 
 func (t *QoS1) HandlePublishAck(puback *packets.Puback) {
 	if t.publishQueue.HandlePublishAck(puback) {
-		t.windows.Put()
 	}
 }
 
@@ -99,7 +95,6 @@ func (t *QoS1) pushMessage() {
 			if !ok {
 				return
 			}
-			t.windows.Get()
 			msg.Packet.QoS = pkg.QoS1
 			t.writer.WritePacket(msg.Packet)
 			t.publishQueue.WritePacket(msg)
@@ -163,4 +158,12 @@ func (t *QoS1) afterClose() error {
 	// save unAck messageID to session when exit
 	t.SessionTopic.SaveTopicUnAckMessageID(t.meta.topic, t.publishQueue.GetUnAckMessageID())
 	return t.publishQueue.Close()
+}
+
+func (t *QoS1) HandlePublishRec(pubrec *packets.Pubrec) {
+	return
+}
+
+func (t *QoS1) HandelPublishComp(pubcomp *packets.Pubcomp) {
+	return
 }

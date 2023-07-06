@@ -1,6 +1,9 @@
 package packet
 
-import "github.com/eclipse/paho.golang/packets"
+import (
+	"github.com/eclipse/paho.golang/packets"
+	"io"
+)
 
 const (
 	DisconnectNormalDisconnection                 = 0x00
@@ -80,4 +83,9 @@ func NewPublishRec() *packets.Pubrec {
 
 func NewPublishComp() *packets.Pubcomp {
 	return packets.NewControlPacket(packets.PUBCOMP).Content.(*packets.Pubcomp)
+}
+
+func WritePacket(writer io.Writer, packet packets.Packet) error {
+	_, err := packet.WriteTo(writer)
+	return err
 }
