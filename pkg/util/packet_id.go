@@ -1,6 +1,7 @@
 package util
 
 import (
+	"math"
 	"math/rand"
 	"sync/atomic"
 )
@@ -17,21 +18,30 @@ func NewPacketIDFactory() *PacketIDFactory {
 	var (
 		id atomic.Uint32
 	)
-	// TODO: first packet id should be random
-	id.Store(uint32(GeneratePacketID()))
+	// TODO: first packet id should be randomInitPacketID
+	id.Store(randomInitPacketID())
 	return &PacketIDFactory{
 		id: &id,
 	}
 }
 
+func randomInitPacketID() uint32 {
+	return uint32(rand.Intn(math.MaxUint32))
+}
+
 func (p *PacketIDFactory) Generate() uint16 {
+	var (
+		newID uint16
+	)
 	id := p.id.Add(1)
 	if id == 0x0000 {
 		return p.Generate()
 	}
-	if id > 0xFF {
-		return uint16(id >> 16)
+	if id > 0x00FF {
+		newID = uint16(id >> 16)
 	} else {
-		return uint16(id)
+		newID = uint16(id)
 	}
+	p.id.Store(uint32(newID))
+	return newID
 }
