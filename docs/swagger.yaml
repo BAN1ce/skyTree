@@ -1,0 +1,11 @@
+basePath: /api/v1
+host: localhost:8080
+info:
+  contact: {}
+  title: SkyTree API
+  version: "1.0"
+paths: {}
+securityDefinitions:
+  BasicAuth:
+    type: basic
+swagger: "2.0"

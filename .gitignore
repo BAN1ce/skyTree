@@ -1,0 +1,6 @@
+.idea
+log
+data
+build/bin
+.run
+private
