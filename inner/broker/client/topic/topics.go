@@ -111,6 +111,18 @@ func (t *Topics) HandlePublishAck(topic string, puback *packets.Puback) {
 	}
 }
 
+func (t *Topics) HandlePublishRec(topic string, pubrec *packets.Pubrec) {
+	if topic, ok := t.topic[topic]; ok {
+		topic.HandlePublishRec(pubrec)
+	}
+}
+
+func (t *Topics) HandelPublishComp(topic string, pubcomp *packets.Pubcomp) {
+	if topic, ok := t.topic[topic]; ok {
+		topic.HandelPublishComp(pubcomp)
+	}
+}
+
 func (t *Topics) createQoS0Topic(topicName string) Topic {
 	return NewQoS0(topicName, t.writer, event.GlobalEvent)
 }

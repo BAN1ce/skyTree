@@ -23,15 +23,17 @@ import (
 )
 
 type Handlers struct {
-	Connect    brokerHandler
-	Publish    brokerHandler
-	PublishAck brokerHandler
-	PublishRel brokerHandler
-	Ping       brokerHandler
-	Sub        brokerHandler
-	UnSub      brokerHandler
-	Auth       brokerHandler
-	Disconnect brokerHandler
+	Connect     brokerHandler
+	Publish     brokerHandler
+	PublishAck  brokerHandler
+	PublishRec  brokerHandler
+	PublishRel  brokerHandler
+	PublishComp brokerHandler
+	Ping        brokerHandler
+	Sub         brokerHandler
+	UnSub       brokerHandler
+	Auth        brokerHandler
+	Disconnect  brokerHandler
 }
 
 type brokerHandler interface {
@@ -123,11 +125,17 @@ func (b *Broker) HandlePacket(client *client.Client, packet *packets.ControlPack
 		b.handlers.Connect.Handle(b, client, packet)
 	case packets.PUBLISH:
 		b.handlers.Publish.Handle(b, client, packet)
+
 	case packets.PUBACK:
 		event.Event.Emit(event.ClientPublishAck)
 		b.handlers.PublishAck.Handle(b, client, packet)
+	case packets.PUBREC:
+		b.handlers.PublishRec.Handle(b, client, packet)
 	case packets.PUBREL:
 		b.handlers.PublishRel.Handle(b, client, packet)
+	case packets.PUBCOMP:
+		b.handlers.PublishComp.Handle(b, client, packet)
+
 	case packets.SUBSCRIBE:
 		event.Event.Emit(event.Subscribe)
 		b.handlers.Sub.Handle(b, client, packet)

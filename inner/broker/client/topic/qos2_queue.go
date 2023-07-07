@@ -59,7 +59,7 @@ func (q *QoS2Queue) HandlePublishRec(pubrec *packets.Pubrec) bool {
 	for e := q.list.Front(); e != nil; e = e.Next() {
 		task := e.Value.(*QoS2Task)
 		if pubrec.PacketID == task.packetID && pubrec.ReasonCode == packets.PubackSuccess {
-			logger.Logger.Debug("delete publish retry task: ", zap.String("retryKey", e.Value.(*QoS2Task).retryKey))
+			logger.Logger.Debug("delete publish rec retry task: ", zap.Uint16("packetID", pubrec.PacketID), zap.String("retryKey", e.Value.(*QoS2Task).retryKey))
 			task.received.Store(true)
 			publishRel := packets.NewControlPacket(packets.PUBREL).Content.(*packets.Pubrel)
 			publishRel.PacketID = pubrec.PacketID

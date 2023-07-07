@@ -113,6 +113,24 @@ func (c *Client) HandlePubAck(pubAck *packets.Puback) {
 	c.topics.HandlePublishAck(topicName, pubAck)
 }
 
+func (c *Client) HandlePubRec(pubRec *packets.Pubrec) {
+	topicName := c.identifierIDTopic[pubRec.PacketID]
+	if len(topicName) == 0 {
+		logger.Logger.Warn("pubRec packetID not found topic", zap.String("client", c.MetaString()), zap.Uint16("packetID", pubRec.PacketID))
+		return
+	}
+	c.topics.HandlePublishRec(topicName, pubRec)
+}
+
+func (c *Client) HandlePubComp(pubRel *packets.Pubcomp) {
+	topicName := c.identifierIDTopic[pubRel.PacketID]
+	if len(topicName) == 0 {
+		logger.Logger.Warn("pubComp packetID not found topic", zap.String("client", c.MetaString()), zap.Uint16("packetID", pubRel.PacketID))
+		return
+	}
+	c.topics.HandelPublishComp(topicName, pubRel)
+}
+
 func (c *Client) Close() error {
 	return c.conn.Close()
 }
@@ -161,6 +179,7 @@ func (c *Client) writePacket(packet packets.Packet) {
 	switch p := packet.(type) {
 	case *packets.Publish:
 		p.PacketID = c.packetIDFactory.Generate()
+		logger.Logger.Debug("publish to client", zap.Uint16("packetID", p.PacketID), zap.String("client", c.MetaString()), zap.String("topic", p.Topic))
 		c.identifierIDTopic[p.PacketID] = p.Topic
 		topicName = p.Topic
 	}
