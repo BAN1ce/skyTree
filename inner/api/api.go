@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	_ "github.com/BAN1ce/skyTree/docs"
+	"github.com/BAN1ce/skyTree/inner/api/store"
 	"github.com/BAN1ce/skyTree/inner/broker"
 	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/labstack/echo/v4"
@@ -55,19 +56,12 @@ func (a *API) route() {
 	a.apiV1.GET("/ping", func(ctx echo.Context) error {
 		return ctx.String(200, "pong")
 	})
-	a.client()
-	a.message()
+	a.storeAPI()
 }
 
-func (a *API) client() {
-	// var (
-	// 	ctr = client.NewController(a.manager)
-	// )
-	// a.apiV1.GET("/clients/:id", ctr.Info)
-	// a.apiV1.DELETE("/clients/:id", ctr.Delete)
-}
-
-func (a *API) message() {
+func (a *API) storeAPI() {
+	ctr := store.NewController(a.store)
+	a.apiV1.GET("/store", ctr.Get)
 
 }
 func (a *API) Name() string {

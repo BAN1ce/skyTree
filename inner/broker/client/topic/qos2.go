@@ -17,26 +17,27 @@ type QoS2 struct {
 	queue       *QoS2Queue
 	writer      PublishWriter
 	publishChan chan *packet.PublishMessage
-	pkg.ClientMessageStore
-	StoreEvent
-	storeHelp
+	*StoreHelp
 }
 
-func NewQos2(topic string, store pkg.ClientMessageStore, writer PublishWriter, storeEvent StoreEvent) *QoS2 {
+type QoS2MessageSession interface {
+	SaveTopicUnRecMessageID(topic string, messageID []string)
+	ReadTopicUnRecMessageID(topic string) []string
+
+	SaveTopicUnCompPacketID(topic string, packetID []uint16)
+	ReadTopicUnCompPacketID(topic string) []uint16
+}
+
+func NewQos2(topic string, writer PublishWriter, help *StoreHelp) *QoS2 {
 	t := &QoS2{
 		meta: &meta{
 			topic:  topic,
 			qos:    pkg.QoS1,
 			writer: writer,
 		},
-		queue:              NewQoS2Queue(writer),
-		writer:             writer,
-		ClientMessageStore: store,
-		StoreEvent:         storeEvent,
-		storeHelp: storeHelp{
-			ClientMessageStore: store,
-			StoreEvent:         storeEvent,
-		},
+		queue:     NewQoS2Queue(writer),
+		writer:    writer,
+		StoreHelp: help,
 	}
 	return t
 }
@@ -75,7 +76,7 @@ func (q *QoS2) pushMessage() {
 			q.writer.WritePacket(msg.Packet)
 			q.queue.WritePacket(msg)
 		default:
-			if err := q.storeHelp.readStore(q.ctx, q.publishChan, q.meta.topic, q.meta.windowSize, false); err != nil {
+			if err := q.StoreHelp.readStore(q.ctx, q.publishChan, q.meta.topic, q.meta.windowSize, false); err != nil {
 				logger.Logger.Error("QoS2: read store error = ", zap.Error(err), zap.String("topic", q.meta.topic))
 			}
 		}

@@ -63,8 +63,14 @@ func (q *PublishQueue) Close() error {
 func (q *PublishQueue) HandlePublishAck(publishAck *packets.Puback) bool {
 	var success bool
 	for e := q.list.Front(); e != nil; e = e.Next() {
-		if publishAck.PacketID == e.Value.(*publishTask).packet.PacketID && publishAck.ReasonCode == packets.PubackSuccess {
-			logger.Logger.Debug("delete publish retry task: ", zap.String("retryKey", e.Value.(*publishTask).retryKey))
+		task, ok := e.Value.(*publishTask)
+		if !ok {
+			logger.Logger.Error("type assertion error")
+			continue
+		}
+		if publishAck.PacketID == task.packet.PacketID && publishAck.ReasonCode == packets.PubackSuccess {
+			facade.DeletePublishRetryKey(task.retryKey)
+			logger.Logger.Debug("delete publish retry task: ", zap.String("retryKey", task.retryKey))
 			q.deleteElement(e)
 			success = true
 			break

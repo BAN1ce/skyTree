@@ -17,21 +17,21 @@ func copyPublish(publish *packets.Publish) *packets.Publish {
 	return publishPacket
 }
 
-type storeHelp struct {
+type StoreHelp struct {
 	lastMessageIDFromStore string
 	StoreEvent
 	pkg.ClientMessageStore
 }
 
-func newStoreHelp(store pkg.ClientMessageStore, event StoreEvent, lastMessageID string) *storeHelp {
-	return &storeHelp{
+func NewStoreHelp(store pkg.ClientMessageStore, event StoreEvent, lastMessageID string) *StoreHelp {
+	return &StoreHelp{
 		lastMessageIDFromStore: lastMessageID,
 		StoreEvent:             event,
 		ClientMessageStore:     store,
 	}
 }
 
-func (s *storeHelp) readStore(ctx context.Context, ch chan<- *packet.PublishMessage, topic string, size int, include bool) error {
+func (s *StoreHelp) readStore(ctx context.Context, ch chan<- *packet.PublishMessage, topic string, size int, include bool) error {
 	if s.lastMessageIDFromStore != "" {
 		if total, err := s.readStoreWriteChan(ctx, ch, topic, s.lastMessageIDFromStore, size, include); err != nil {
 			return err
@@ -63,7 +63,7 @@ func (s *storeHelp) readStore(ctx context.Context, ch chan<- *packet.PublishMess
 	return nil
 }
 
-func (s *storeHelp) readStoreWriteChan(ctx context.Context, ch chan<- *packet.PublishMessage, topic string, id string, size int, include bool) (int, error) {
+func (s *StoreHelp) readStoreWriteChan(ctx context.Context, ch chan<- *packet.PublishMessage, topic string, id string, size int, include bool) (int, error) {
 	logger.Logger.Debug("readStoreWriteChan", zap.String("topic", topic), zap.String("id", id), zap.Int("size", size), zap.Bool("include", include))
 	var (
 		message, err = s.ReadTopicMessagesByID(ctx, topic, id, size, include)

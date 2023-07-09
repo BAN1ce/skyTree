@@ -1,7 +1,6 @@
 package session
 
 import (
-	"context"
 	"sync"
 )
 
@@ -10,7 +9,7 @@ type MemorySession struct {
 	subTopicsMeta *subTopicsMeta
 }
 
-func NewSession() *MemorySession {
+func NewSession(key string) *MemorySession {
 	return &MemorySession{
 		subTopicsMeta: newSubTopicsMeta(),
 	}
@@ -18,12 +17,6 @@ func NewSession() *MemorySession {
 
 func (s *MemorySession) Destroy() {
 	// TODO: GC session
-}
-
-func (s *MemorySession) OnceListenTopicStoreEvent(ctx context.Context, clientID string, f func(topic, id string)) {
-	// TODO: add store event listener
-	panic("implement me")
-
 }
 
 func (s *MemorySession) ReadSubTopics() map[string]int32 {
@@ -60,6 +53,12 @@ func (s *MemorySession) SaveTopicUnAckMessageID(topic string, messageID []string
 	s.mux.Lock()
 	defer s.mux.Unlock()
 	s.subTopicsMeta.CreateTopicUnAckMessageID(topic, messageID)
+}
+
+func (s *MemorySession) SaveTopicUnRecPacketID(topic string, packetID []string) {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+	s.subTopicsMeta.CreateTopicUnRecPacketID(topic, packetID)
 }
 
 func (s *MemorySession) DeleteTopicUnAckMessageID(topic string, messageID string) {

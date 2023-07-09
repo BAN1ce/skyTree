@@ -29,6 +29,14 @@ func randomInitPacketID() uint32 {
 	return uint32(rand.Intn(math.MaxUint32))
 }
 
+func (p *PacketIDFactory) SetID(id uint16) {
+	p.id.Store(uint32(id))
+}
+
+func (p *PacketIDFactory) ReadID() uint16 {
+	return uint16(p.id.Load())
+}
+
 func (p *PacketIDFactory) Generate() uint16 {
 	var (
 		newID uint16

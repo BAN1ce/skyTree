@@ -11,6 +11,7 @@ import (
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/inner/metric"
 	"github.com/BAN1ce/skyTree/inner/version"
+	"github.com/nutsdb/nutsdb"
 	"log"
 	"sync"
 )
@@ -34,7 +35,7 @@ func NewApp() *App {
 	var (
 		clientManager        = broker.NewManager()
 		sessionManager       = session.NewSessionManager()
-		dbStore              = store.NewNutsDBStore()
+		dbStore              = store.NewLocalStore(nutsdb.DefaultOptions, nutsdb.WithDir("./data/nutsdb"))
 		publishRetrySchedule = facade.SinglePublishRetry()
 		app                  = &App{
 			brokerCore: broker.NewBroker(

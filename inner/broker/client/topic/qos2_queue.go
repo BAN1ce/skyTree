@@ -47,6 +47,23 @@ func (q *QoS2Queue) WritePacket(message *packet.PublishMessage) {
 	q.createRetry(retryKey, task)
 }
 
+func (q *QoS2Queue) WritePublishRel(packetID uint16) {
+	var (
+		retryKey = uuid.NewString()
+		task     = &QoS2Task{
+			packetID: packetID,
+			retryKey: retryKey,
+			received: atomic.Bool{},
+		}
+		publishRel = packets.NewControlPacket(packets.PUBREL).Content.(*packets.Pubrel)
+	)
+	task.received.Store(true)
+	publishRel.PacketID = packetID
+	q.writer.WritePacket(publishRel)
+	q.createRetry(retryKey, task)
+
+}
+
 func (q *QoS2Queue) Close() error {
 	for e := q.list.Front(); e != nil; e = e.Next() {
 		q.deleteElement(e)
@@ -78,7 +95,7 @@ func (q *QoS2Queue) HandlePublishComp(pubcomp *packets.Pubcomp) {
 			return
 		}
 		if pubcomp.PacketID == task.packetID {
-			facade.GetPublishRetry().Delete(task.retryKey)
+			facade.DeletePublishRetryKey(task.retryKey)
 			q.deleteElement(e)
 			break
 		}

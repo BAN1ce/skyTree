@@ -37,7 +37,9 @@ func GetPublishRetry() RetrySchedule {
 	)
 	return SinglePublishRetry(retry.WithInterval(cfg.GetInterval()), retry.WithSlotNum(cfg.GetSlotNum()))
 }
-
+func DeletePublishRetryKey(key string) {
+	GetPubRelRetry().Delete(key)
+}
 func SinglePubRelRetry(ctx context.Context, option ...retry.Option) RetrySchedule {
 	OncePubRelRetry.Do(func() {
 		var s = retry.NewSchedule(ctx, option...)

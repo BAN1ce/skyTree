@@ -5,6 +5,7 @@ type topicMeta struct {
 	topic            string
 	qos              int32
 	unAckMessageID   map[string]struct{}
+	unRecPacketID    map[string]struct{}
 	lastAckMessageID string
 }
 
@@ -66,12 +67,14 @@ func (s *subTopicsMeta) CreateTopicUnAckMessageID(topic string, messageID []stri
 	} else {
 		if topicMeta.unAckMessageID == nil {
 			topicMeta.unAckMessageID = make(map[string]struct{})
-
 		}
 		for _, id := range messageID {
 			topicMeta.unAckMessageID[id] = struct{}{}
 		}
 	}
+}
+func (s *subTopicsMeta) CreateTopicUnRecPacketID(topic string, packetID []string) {
+
 }
 
 func (s *subTopicsMeta) DeleteTopicUnAckMessageID(topic string, messageID string) {

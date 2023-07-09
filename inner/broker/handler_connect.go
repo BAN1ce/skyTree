@@ -2,7 +2,6 @@ package broker
 
 import (
 	client2 "github.com/BAN1ce/skyTree/inner/broker/client"
-	session2 "github.com/BAN1ce/skyTree/inner/broker/session"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/BAN1ce/skyTree/pkg/errs"
@@ -108,13 +107,13 @@ func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client
 	if cleanStart {
 		// clean session
 		broker.sessionManager.DeleteSession(clientID)
-		session = session2.NewSession()
+		session = broker.sessionManager.NewSession(clientID)
 		broker.sessionManager.CreateSession(clientID, session)
 	} else {
 		session, exists = broker.sessionManager.ReadSession(clientID)
 		if !exists {
 			// create new session for client
-			session = session2.NewSession()
+			session = broker.sessionManager.NewSession(clientID)
 			broker.sessionManager.CreateSession(clientID, session)
 		} else {
 			// use old session

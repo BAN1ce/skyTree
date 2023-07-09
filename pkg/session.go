@@ -1,69 +1,55 @@
 package pkg
 
 import (
-	"context"
 	"time"
 )
 
 type SessionKey string
-
-const (
-	WillFlag      = SessionKey("will_flag")
-	WillQos       = SessionKey("will_qos")
-	WillRetain    = SessionKey("will_retain")
-	WillMessage   = SessionKey("will_message")
-	Username      = SessionKey("username")
-	KeepAlive     = SessionKey("keep_alive")
-	LastAliveTime = SessionKey("last_alive_time")
-)
-const (
-	PropertySessionExpiryInterval = SessionKey("session_expiry_interval")
-	PropertyReceiveMaximum        = SessionKey("receive_maximum")
-	PropertyMaximumPacketSize     = SessionKey("maximum_packet_size")
-	PropertyMaximumQoS            = SessionKey("maximum_qos")
-	PropertyTopicAliasMaximum     = SessionKey("topic_alias_maximum")
-	PropertyRequestResponseInfo   = SessionKey("request_response_info")
-	PropertyRequestProblemInfo    = SessionKey("request_problem_info")
-	PropertyUserProperty          = SessionKey("user_property")
-	PropertyAuthMethod            = SessionKey("auth_method")
-	PropertyAuthData              = SessionKey("auth_data")
-)
-
-const (
-	WillPropertyWillDelayInterval      = SessionKey("will_delay_interval")
-	WillPropertyPayloadFormatIndicator = SessionKey("will_payload_format_indicator")
-	WillPropertyMessageExpiryInterval  = SessionKey("will_message_expiry_interval")
-	WillPropertyContentType            = SessionKey("will_content_type")
-	WillPropertyResponseTopic          = SessionKey("will_response_topic")
-	WillPropertyCorrelationData        = SessionKey("will_correlation_data")
-	WillPropertySubscriptionIdentifier = SessionKey("will_subscription_identifier")
-	WillPropertyUserProperty           = SessionKey("will_user_property")
-	WillTopic                          = SessionKey("will_topic")
-	WillPayload                        = SessionKey("will_payload")
-)
-const (
-	SubTopic = SessionKey("sub_topic")
-)
-
-const (
-	WillFlagTrue    = "true"
-	WillFlagFalse   = "false"
-	WillQos0        = "0"
-	WillQos1        = "1"
-	WillQos2        = "2"
-	WillRetainTrue  = "true"
-	WillRetainFalse = "false"
-)
 
 type Session interface {
 	Destroy()
 	SessionTopic
 }
 
+type SessionClient interface {
+	GetSubTopics() map[string]int32
+	CreateSubTopic(topic string, qos int32)
+	DeleteSubTopic(topic string)
+	SessionTopicMessage
+}
+
+type SessionTopicMessage interface {
+	/*
+		about un ack message id
+	*/
+	ReadTopicUnAckMessageID(topic string) []string
+	SetTopicUnAckMessageID(topic string, messageID []string)
+	DeleteTopicUnAckMessageID(topic string)
+	/*
+		about un rec packet id
+	*/
+	ReadTopicUnRecPacketID(topic string) []string
+	SetTopicUnRecPacketID(topic string, packetID []string)
+	DeleteTopicUnRecPacketID(topic string)
+
+	/*
+		about un comp packet id
+	*/
+	ReadTopicUnCompPacketID(topic string) []string
+	SetTopicUnCompPacketID(topic string, packetID []string)
+	DeleteTopicUnCompPacketID(topic string)
+
+	/*
+		about last acked message id
+	*/
+
+	ReadTopicLastAckedMessageID(topic string) (string, bool)
+	SetTopicLastAckedMessageID(topic string, messageID string)
+	DeleteTopicLastAckedMessageID(topic string)
+}
+
 type SessionTopic interface {
 	ReleaseTopicSession(topic string)
-
-	OnceListenTopicStoreEvent(ctx context.Context, topic string, f func(topic, id string))
 
 	CreateWill(topic string, qos int32, retain bool, payload []byte, properties map[string]string)
 	// CreateSubTopics create sub topic with QoS
@@ -71,6 +57,8 @@ type SessionTopic interface {
 
 	// SaveTopicUnAckMessageID ReadTopicUnAckMessageID read topic un ack message id when client connect again
 	SaveTopicUnAckMessageID(topic string, messageID []string)
+
+	SaveTopicUnRecPacketID(topic string, packetID []string)
 
 	// UpdateTopicLastAckedMessageID update topic last acked message id
 	UpdateTopicLastAckedMessageID(topic string, messageID string)
@@ -83,8 +71,6 @@ type SessionTopic interface {
 
 	// ReadTopicUnAckMessageID  read topic un ack message id when client connect again
 	ReadTopicUnAckMessageID(topic string) []string
-
-	ReadSubTopicsLastAckedMessageID() map[string]string
 
 	// DeleteSubTopics delete sub topic
 	DeleteSubTopics(topic string)

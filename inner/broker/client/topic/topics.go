@@ -128,11 +128,11 @@ func (t *Topics) createQoS0Topic(topicName string) Topic {
 }
 
 func (t *Topics) createQoS1Topic(topicName string, writer PublishWriter) Topic {
-	return NewQos1(topicName, 10, t.store, t.session, writer, event.GlobalEvent)
+	return NewQos1(topicName, t.session, writer, NewStoreHelp(t.store, event.GlobalEvent, ""))
 }
 
 func (t *Topics) createQoS2Topic(topicName string, writer PublishWriter) Topic {
-	return NewQos2(topicName, t.store, writer, event.GlobalEvent)
+	return NewQos2(topicName, writer, NewStoreHelp(t.store, event.GlobalEvent, ""))
 }
 
 func (t *Topics) DeleteTopic(topicName string) {

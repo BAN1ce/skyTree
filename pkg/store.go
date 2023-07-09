@@ -5,6 +5,7 @@ import (
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/eclipse/paho.golang/packets"
+	"time"
 )
 
 type PublishElement interface {
@@ -19,7 +20,13 @@ type Store interface {
 	PublishedStore
 }
 
+type TopicStoreInfo interface {
+	GetTopicMessageTotalCount(ctx context.Context, topic string) (int64, error)
+	DeleteTopicMessages(ctx context.Context, topic string) error
+}
+
 type ClientMessageStore interface {
+	ReadFromTimestamp(ctx context.Context, topic string, timestamp time.Time, limit int) ([]packet.PublishMessage, error)
 	ReadTopicMessagesByID(ctx context.Context, topic, id string, limit int, include bool) ([]packet.PublishMessage, error)
 }
 

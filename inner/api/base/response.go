@@ -1,10 +1,15 @@
-package api
+package base
 
 type Response struct {
 	Code    int         `json:"code"`
 	Msg     string      `json:"msg,omitempty"`
 	Data    interface{} `json:"data,omitempty"`
 	Success bool        `json:"success"`
+}
+type Page struct {
+	Total    int `json:"total"`
+	Page     int `json:"page"`
+	PageSize int `json:"page_size"`
 }
 
 func WithData(data interface{}) *Response {

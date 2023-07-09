@@ -5,37 +5,33 @@ import (
 	"errors"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/db"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/google/uuid"
 	"github.com/nutsdb/nutsdb"
 	"github.com/nutsdb/nutsdb/ds/zset"
 	"go.uber.org/zap"
-	"log"
 	"math"
 	"time"
 )
 
-type NutsDB struct {
+type Local struct {
 	db *nutsdb.DB
 }
 
-func NewNutsDBStore() *NutsDB {
+func NewLocalStore(options nutsdb.Options, option ...nutsdb.Option) *Local {
 	var (
-		err   error
-		store = new(NutsDB)
+		store = new(Local)
 	)
-	store.db, err = nutsdb.Open(
-		nutsdb.DefaultOptions,
-		// TODO: support config
-		nutsdb.WithDir("./data/nutsdb"),
-	)
-	if err != nil {
-		log.Fatalln("open db error: ", err)
+	db.InitNutsDB(options, option...)
+	store.db = db.GetNutsDB()
+	if store.db == nil {
+		logger.Logger.Panic("local db is nil")
 	}
 	return store
 }
 
-func (s *NutsDB) CreatePacket(topic string, value []byte) (id string, err error) {
+func (s *Local) CreatePacket(topic string, value []byte) (id string, err error) {
 	var (
 		timestamp = time.Now().UnixNano()
 	)
@@ -48,7 +44,7 @@ func (s *NutsDB) CreatePacket(topic string, value []byte) (id string, err error)
 	return
 }
 
-func (s *NutsDB) ReadFromTimestamp(ctx context.Context, topic string, timestamp time.Time, limit int) ([]packet.PublishMessage, error) {
+func (s *Local) ReadFromTimestamp(ctx context.Context, topic string, timestamp time.Time, limit int) ([]packet.PublishMessage, error) {
 	var (
 		messages []packet.PublishMessage
 		err      error
@@ -67,7 +63,7 @@ func (s *NutsDB) ReadFromTimestamp(ctx context.Context, topic string, timestamp 
 
 }
 
-func (s *NutsDB) ReadTopicMessagesByID(ctx context.Context, topic, id string, limit int, include bool) ([]packet.PublishMessage, error) {
+func (s *Local) ReadTopicMessagesByID(ctx context.Context, topic, id string, limit int, include bool) ([]packet.PublishMessage, error) {
 	var (
 		messages []packet.PublishMessage
 		err      error
@@ -103,7 +99,7 @@ func (s *NutsDB) ReadTopicMessagesByID(ctx context.Context, topic, id string, li
 	return messages, err
 }
 
-func (s *NutsDB) DeleteBeforeID(id string) {
+func (s *Local) DeleteBeforeID(id string) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -114,7 +110,7 @@ func nutsDBValuesBeMessages(values []*zset.SortedSetNode, topic string) []packet
 	)
 	for _, v := range values {
 		if pubPacket, err := pkg.Decode(v.Value); err != nil {
-			logger.Logger.Error("read from NutsDB decode error: ", zap.Error(err))
+			logger.Logger.Error("read from Local decode error: ", zap.Error(err))
 			continue
 		} else {
 			messages = append(messages, packet.PublishMessage{
