@@ -1,8 +1,10 @@
 package session
 
 import (
+	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/BAN1ce/skyTree/pkg/db"
+	"go.uber.org/zap"
 	"sync"
 )
 
@@ -39,7 +41,15 @@ func NewSessionManager(options ...Option) *Manager {
 func (m *Manager) DeleteSession(key string) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
+	session, ok := m.sessions[key]
+	if ok {
+		logger.Logger.Debug("release client.proto", zap.String("sessionKey", key))
+		if err := session.Release(); err != nil {
+			logger.Logger.Error("release client.proto failed", zap.Error(err), zap.String("sessionKey", key))
+		}
+	}
 	delete(m.sessions, key)
+
 }
 
 func (m *Manager) ReadSession(key string) (pkg.Session, bool) {
@@ -70,12 +80,6 @@ func Factory(sessionType int) func(key string) pkg.Session {
 		}
 	case TypeRedis:
 		panic("not implement")
-
-	case TypeMemory:
-		return func(key string) pkg.Session {
-			return NewSession(key)
-		}
-
 	}
 	return nil
 }

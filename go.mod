@@ -9,7 +9,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/kataras/go-events v0.0.4-0.20230406131528-91567b08c4a7
 	github.com/labstack/echo/v4 v4.10.2
-	github.com/lni/dragonboat/v3 v3.3.6
+	github.com/lni/dragonboat/v3 v3.3.7
 	github.com/nutsdb/nutsdb v0.12.0
 	github.com/prometheus/client_golang v1.16.0
 	github.com/sirupsen/logrus v1.9.0

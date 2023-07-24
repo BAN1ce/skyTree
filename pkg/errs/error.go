@@ -11,10 +11,10 @@ var (
 
 var (
 	ErrInvalidPacket              = errors.New("invalid packet")
-	ErrInvalidRequestResponseInfo = errors.New("invalid request response info")
-	ErrInvalidRequestProblemInfo  = errors.New("invalid request problem info")
+	ErrInvalidRequestResponseInfo = errors.New("invalid api response info")
+	ErrInvalidRequestProblemInfo  = errors.New("invalid api problem info")
 	ErrConnackInvalidClientID     = errors.New("connack invalid client id")
-	ErrSetClientSession           = errors.New("set client session error")
+	ErrSetClientSession           = errors.New("set client client.proto error")
 	ErrClientIDEmpty              = errors.New("client id empty")
 	ErrConnectPacketDuplicate     = errors.New("connect packet duplicate")
 	ErrProtocolNotSupport         = errors.New("protocol not support")

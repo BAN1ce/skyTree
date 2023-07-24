@@ -100,7 +100,7 @@ func (c *Client) HandleSub(subscribe *packets.Subscribe) map[string]byte {
 func (c *Client) HandleUnSub(topicName string) {
 	c.mux.Lock()
 	defer c.mux.Unlock()
-	c.options.session.DeleteSubTopics(topicName)
+	c.options.session.DeleteSubTopic(topicName)
 	c.topics.DeleteTopic(topicName)
 }
 

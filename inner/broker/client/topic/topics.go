@@ -70,7 +70,7 @@ func NewTopicWithSession(ctx context.Context, session pkg.SessionTopic, op ...Op
 	t := NewTopics(ctx, op...)
 	t.session = session
 	for topic, qos := range session.ReadSubTopics() {
-		logger.Logger.Debug("read topic from session = ", zap.String("topic", topic), zap.Int32("qos", qos))
+		logger.Logger.Debug("read topic from client.proto = ", zap.String("topic", topic), zap.Int32("qos", qos))
 		t.CreateTopic(topic, pkg.Int32ToQoS(qos))
 
 	}
@@ -100,7 +100,7 @@ func (t *Topics) CreateTopic(topicName string, qos pkg.QoS) {
 		logger.Logger.Warn("create topic with wrong QoS ", zap.Uint8("qos", uint8(qos)))
 		return
 	}
-	t.session.CreateSubTopics(topicName, int32(qos))
+	t.session.CreateSubTopic(topicName, int32(qos))
 	t.topic[topicName] = topic
 	go topic.Start(t.ctx)
 }

@@ -31,7 +31,6 @@ type SubTree interface {
 	DeleteSub(clientID string, topics []string)
 	Match(topic string) (clientIDQos map[string]int32)
 	DeleteClient(clientID string)
-	HasSub(topic string) bool
 }
 
 func Int32ToQoS(qos int32) QoS {

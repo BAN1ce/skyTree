@@ -211,6 +211,8 @@ github.com/labstack/gommon v0.4.0 h1:y7cvthEAEbU0yHOf4axH8ZG2NH8knB9iNSoTO8dyIk8
 github.com/labstack/gommon v0.4.0/go.mod h1:uW6kP17uPlLJsD3ijUYn3/M5bAxtlZhMI6m3MFxTMTM=
 github.com/lni/dragonboat/v3 v3.3.6 h1:HVuGNTtZd9FJrbHdPxcmChWs5YSI7kp4uE28eDELGFM=
 github.com/lni/dragonboat/v3 v3.3.6/go.mod h1:5FDHL74ORs7kI3lDDlQl6q5eBButqQpw94/QLqBjLIk=
+github.com/lni/dragonboat/v3 v3.3.7 h1:rrA/p6gM/iLxFmOVFE39aY1SIcWxDBzneNay9B5JXTs=
+github.com/lni/dragonboat/v3 v3.3.7/go.mod h1:4Di3Nscoy2XZ39J5Ro1mRNyrVy0RlYqnrZkPiSKSScQ=
 github.com/lni/goutils v1.3.0 h1:oBhV7Z5DjNWbcy/c3fFj6qo4SnHcpyTY28qfKvLy6UM=
 github.com/lni/goutils v1.3.0/go.mod h1:PUPtBAnZlRPUKWUXCsYkIRWubJbtNHpTAee0sczhlf4=
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=

@@ -1,5 +1,9 @@
 package base
 
+const (
+	CodeClientNotExists = 1000 + iota
+)
+
 type Response struct {
 	Code    int         `json:"code"`
 	Msg     string      `json:"msg,omitempty"`
@@ -34,6 +38,16 @@ func WithCode(code int) *Response {
 	return &Response{
 		Code:    code,
 		Msg:     "",
+		Data:    nil,
+		Success: false,
+	}
+}
+
+func WithError(err error) *Response {
+	// Fixme: use specific error code
+	return &Response{
+		Code:    500,
+		Msg:     err.Error(),
 		Data:    nil,
 		Success: false,
 	}

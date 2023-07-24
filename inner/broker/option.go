@@ -1,7 +1,6 @@
 package broker
 
 import (
-	"github.com/BAN1ce/skyTree/inner/broker/session"
 	"github.com/BAN1ce/skyTree/inner/broker/store"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/pkg"
@@ -40,7 +39,7 @@ func WithHandlers(handlers *Handlers) Option {
 	}
 }
 
-func WithSessionManager(manager *session.Manager) Option {
+func WithSessionManager(manager pkg.SessionManager) Option {
 	return func(broker *Broker) {
 		broker.sessionManager = manager
 	}

@@ -1,15 +1,26 @@
 package session
 
 import (
+	"github.com/BAN1ce/skyTree/inner/api/base"
 	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/labstack/echo/v4"
 )
 
+type Manager interface {
+	ReadSession(key string) (pkg.Session, bool)
+}
 type Controller struct {
-	pkg.Session
+	manager Manager
 }
 
-func (o *Controller) Info(ctx echo.Context) error {
+func NewController(manager Manager) *Controller {
+	return &Controller{
+		manager: manager,
+	}
+
+}
+
+func (c *Controller) Info(ctx echo.Context) error {
 	var (
 		req = InfoRequest{}
 		err error
@@ -17,5 +28,21 @@ func (o *Controller) Info(ctx echo.Context) error {
 	if err = ctx.Bind(&req); err != nil {
 		return err
 	}
-	return err
+	session, ok := c.manager.ReadSession(req.ClientID)
+	if !ok {
+		return ctx.JSON(200, base.WithCode(base.CodeClientNotExists))
+	}
+	var data infoData
+
+	for topic, qos := range session.ReadSubTopics() {
+		lastMessageID, _ := session.ReadTopicLastAckedMessageID(topic)
+		data.SubTopic = append(data.SubTopic, subTopic{
+			Topic:          topic,
+			Qos:            int(qos),
+			LastMessageID:  lastMessageID,
+			UnAckMessageID: session.ReadTopicUnAckMessageID(topic),
+		})
+	}
+	data.ClientID = req.ClientID
+	return ctx.JSON(200, base.WithData(data))
 }

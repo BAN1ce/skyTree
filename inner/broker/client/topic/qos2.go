@@ -49,7 +49,7 @@ func (q *QoS2) Start(ctx context.Context) {
 	}
 	q.publishChan = make(chan *packet.PublishMessage, q.meta.windowSize)
 
-	// read session unAck publishChan first
+	// read client.proto unAck publishChan first
 	q.pushMessage()
 	// waiting for exit, prevent pushMessage use goroutine
 	<-ctx.Done()

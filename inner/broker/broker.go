@@ -7,7 +7,6 @@ import (
 	"github.com/BAN1ce/skyTree/inner/broker/client"
 	"github.com/BAN1ce/skyTree/inner/broker/event"
 	"github.com/BAN1ce/skyTree/inner/broker/server"
-	"github.com/BAN1ce/skyTree/inner/broker/session"
 	"github.com/BAN1ce/skyTree/inner/broker/store"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/logger"
@@ -46,7 +45,7 @@ type Broker struct {
 	subTree        pkg.SubTree
 	store          *store.Wrapper
 	clientManager  *Manager
-	sessionManager *session.Manager
+	sessionManager pkg.SessionManager
 	publishPool    *pool.Publish
 	publishRetry   facade.RetrySchedule
 	preMiddleware  map[byte][]middleware.PacketMiddleware

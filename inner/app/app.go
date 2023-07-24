@@ -3,11 +3,13 @@ package app
 import (
 	"context"
 	"fmt"
+	app2 "github.com/BAN1ce/Tree/app"
 	"github.com/BAN1ce/skyTree/config"
 	"github.com/BAN1ce/skyTree/inner/api"
 	"github.com/BAN1ce/skyTree/inner/broker"
 	"github.com/BAN1ce/skyTree/inner/broker/session"
 	"github.com/BAN1ce/skyTree/inner/broker/store"
+	"github.com/BAN1ce/skyTree/inner/broker/subtree"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/inner/metric"
 	"github.com/BAN1ce/skyTree/inner/version"
@@ -33,9 +35,21 @@ func NewApp() *App {
 	// todo: get config
 	metric.Init()
 	var (
-		clientManager        = broker.NewManager()
-		sessionManager       = session.NewSessionManager()
-		dbStore              = store.NewLocalStore(nutsdb.DefaultOptions, nutsdb.WithDir("./data/nutsdb"))
+		subTree = app2.NewApp()
+	)
+	if err := subTree.StartTopicCluster(context.TODO()); err != nil {
+		log.Fatal("start topic cluster failed", err)
+	}
+	var (
+		clientManager  = broker.NewManager()
+		sessionManager = session.NewSessionManager()
+		dbStore        = store.NewLocalStore(nutsdb.Options{
+			EntryIdxMode: nutsdb.HintKeyValAndRAMIdxMode,
+			SegmentSize:  nutsdb.MB * 256,
+			NodeNum:      1,
+			RWMode:       nutsdb.MMap,
+			SyncEnable:   true,
+		}, nutsdb.WithDir("./data/nutsdb"))
 		publishRetrySchedule = facade.SinglePublishRetry()
 		app                  = &App{
 			brokerCore: broker.NewBroker(
@@ -43,7 +57,7 @@ func NewApp() *App {
 				broker.WithStore(store.NewStoreWrapper(dbStore)),
 				broker.WithSessionManager(sessionManager),
 				broker.WithClientManager(clientManager),
-				broker.WithSubTree(broker.NewSubTree()),
+				broker.WithSubTree(subtree.NewSubTree(subTree)),
 				broker.WithHandlers(&broker.Handlers{
 					Connect:     broker.NewConnectHandler(),
 					Publish:     broker.NewPublishHandler(),
@@ -61,7 +75,10 @@ func NewApp() *App {
 	)
 	app.components = []component{
 		app.brokerCore,
-		api.NewAPI(fmt.Sprintf(":%d", config.GetServer().GetPort()), api.WithClientManager(clientManager), api.WithStore(dbStore)),
+		api.NewAPI(fmt.Sprintf(":%d", config.GetServer().GetPort()),
+			api.WithClientManager(clientManager),
+			api.WithStore(dbStore),
+			api.WithSessionManager(sessionManager)),
 	}
 	return app
 }

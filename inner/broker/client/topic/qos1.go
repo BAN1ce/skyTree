@@ -16,7 +16,7 @@ type StoreEvent interface {
 }
 
 type QoS1MessageSession interface {
-	SaveTopicUnAckMessageID(topic string, messageID []string)
+	CreateTopicUnAckMessageID(topic string, messageID []string)
 	ReadTopicUnAckMessageID(topic string) []string
 }
 
@@ -54,7 +54,7 @@ func (q *QoS1) Start(ctx context.Context) {
 		q.meta.windowSize = config.GetTopic().WindowSize
 	}
 	q.publishChan = make(chan *packet.PublishMessage, q.meta.windowSize)
-	// read session unAck publishChan first
+	// read client.proto unAck publishChan first
 	q.readSessionUnAck()
 	q.pushMessage()
 	// waiting for exit, prevent pushMessage use goroutine
@@ -72,7 +72,7 @@ func (q *QoS1) readSessionUnAck() {
 	for _, id := range messageID {
 		msg, err := q.ClientMessageStore.ReadTopicMessagesByID(context.TODO(), q.meta.topic, id, 1, true)
 		if err != nil {
-			logger.Logger.Error("read session unAck publishChan message error", zap.Error(err), zap.String("topic", q.meta.topic), zap.String("messageID", id))
+			logger.Logger.Error("read client.proto unAck publishChan message error", zap.Error(err), zap.String("topic", q.meta.topic), zap.String("messageID", id))
 			continue
 		}
 		for _, m := range msg {
@@ -117,11 +117,11 @@ func (q *QoS1) Close() error {
 	return nil
 }
 
-// afterClose save unAck messageID to session when exit
+// afterClose save unAck messageID to client.proto when exit
 // should be call after close and only call once
 func (q *QoS1) afterClose() error {
-	// save unAck messageID to session when exit
-	q.QoS1MessageSession.SaveTopicUnAckMessageID(q.meta.topic, q.publishQueue.GetUnAckMessageID())
+	// save unAck messageID to client.proto when exit
+	q.QoS1MessageSession.CreateTopicUnAckMessageID(q.meta.topic, q.publishQueue.GetUnAckMessageID())
 	return q.publishQueue.Close()
 }
 

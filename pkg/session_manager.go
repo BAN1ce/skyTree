@@ -1,0 +1,8 @@
+package pkg
+
+type SessionManager interface {
+	ReadSession(key string) (Session, bool)
+	DeleteSession(key string)
+	CreateSession(key string, session Session)
+	NewSession(clientID string) Session
+}

@@ -48,14 +48,14 @@ func (c *ConnectHandler) Handle(broker *Broker, client *client2.Client, packet *
 	}
 	// TODO: handle will message
 	if connectPacket.WillFlag {
-		// session.Set(pkg.WillFlag, pkg.WillFlagTrue)
+		// client.proto.Set(pkg.WillFlag, pkg.WillFlagTrue)
 		switch connectPacket.WillQOS {
 		case 0x00:
-			// session.Set(pkg.WillQos, pkg.WillQos0)
+			// client.proto.Set(pkg.WillQos, pkg.WillQos0)
 		case 0x01:
-			// session.Set(pkg.WillQos, pkg.WillQos1)
+			// client.proto.Set(pkg.WillQos, pkg.WillQos1)
 		case 0x02:
-			// session.Set(pkg.WillQos, pkg.WillQos2)
+			// client.proto.Set(pkg.WillQos, pkg.WillQos2)
 		default:
 			conAck.ReasonCode = packets.ConnackProtocolError
 			broker.writePacket(client, conAck)
@@ -63,13 +63,13 @@ func (c *ConnectHandler) Handle(broker *Broker, client *client2.Client, packet *
 			return
 		}
 		if connectPacket.WillRetain {
-			// session.Set(pkg.WillRetain, pkg.WillRetainTrue)
+			// client.proto.Set(pkg.WillRetain, pkg.WillRetainTrue)
 		} else {
-			// session.Set(pkg.WillRetain, pkg.WillRetainFalse)
+			// client.proto.Set(pkg.WillRetain, pkg.WillRetainFalse)
 		}
-		// TODO: handle will message to store session
+		// TODO: handle will message to store client.proto
 	} else {
-		// session.Set(pkg.WillFlag, pkg.WillFlagFalse)
+		// client.proto.Set(pkg.WillFlag, pkg.WillFlagFalse)
 	}
 
 	// TODO: connect ack properties implementation
@@ -87,8 +87,8 @@ func (c *ConnectHandler) handleConnectProperties(_ *Broker, client *client2.Clie
 	return nil
 }
 
-// handleCleanStart handle clean start flag, if clean start is true, delete session from session manager and create new session for client.
-// if clean start is false, read session from session manager, if session not exists, create new session for client, else use old session.
+// handleCleanStart handle clean start flag, if clean start is true, delete client.proto from client.proto manager and create new client.proto for client.
+// if clean start is false, read client.proto from client.proto manager, if client.proto not exists, create new client.proto for client, else use old client.proto.
 // clean start is false, clientID must not be empty.
 func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client, packet packets.Connect, connack *packets.Connack) error {
 	var (
@@ -105,18 +105,18 @@ func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client
 		clientID = uuid.New().String()
 	}
 	if cleanStart {
-		// clean session
+		// clean client.proto
 		broker.sessionManager.DeleteSession(clientID)
 		session = broker.sessionManager.NewSession(clientID)
 		broker.sessionManager.CreateSession(clientID, session)
 	} else {
 		session, exists = broker.sessionManager.ReadSession(clientID)
 		if !exists {
-			// create new session for client
+			// create new client.proto for client
 			session = broker.sessionManager.NewSession(clientID)
 			broker.sessionManager.CreateSession(clientID, session)
 		} else {
-			// use old session
+			// use old client.proto
 			connack.SessionPresent = true
 		}
 	}
