@@ -15,7 +15,7 @@ func WithUserAuth(auth middleware.UserAuth) Option {
 	}
 }
 
-func WithClientManager(manager *Manager) Option {
+func WithClientManager(manager *ClientManager) Option {
 	return func(core *Broker) {
 		core.clientManager = manager
 	}

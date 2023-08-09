@@ -15,28 +15,20 @@ type QoS2 struct {
 	cancel      context.CancelFunc
 	meta        *meta
 	queue       *QoS2Queue
-	writer      PublishWriter
 	publishChan chan *packet.PublishMessage
 	*StoreHelp
 }
 
-type QoS2MessageSession interface {
-	SaveTopicUnRecMessageID(topic string, messageID []string)
-	ReadTopicUnRecMessageID(topic string) []string
-
-	SaveTopicUnCompPacketID(topic string, packetID []uint16)
-	ReadTopicUnCompPacketID(topic string) []uint16
-}
-
-func NewQos2(topic string, writer PublishWriter, help *StoreHelp) *QoS2 {
+func NewQos2(topic string, writer PublishWriter, help *StoreHelp, data PrepareMetaData) *QoS2 {
+	latestMessageID, _ := data.ReadTopicLatestPushedMessageID(topic)
 	t := &QoS2{
 		meta: &meta{
-			topic:  topic,
-			qos:    pkg.QoS1,
-			writer: writer,
+			topic:           topic,
+			qos:             pkg.QoS1,
+			writer:          writer,
+			latestMessageID: latestMessageID,
 		},
 		queue:     NewQoS2Queue(writer),
-		writer:    writer,
 		StoreHelp: help,
 	}
 	return t
@@ -49,7 +41,8 @@ func (q *QoS2) Start(ctx context.Context) {
 	}
 	q.publishChan = make(chan *packet.PublishMessage, q.meta.windowSize)
 
-	// read client.proto unAck publishChan first
+	// read client unRec packet first
+	// read client unComp packet first
 	q.pushMessage()
 	// waiting for exit, prevent pushMessage use goroutine
 	<-ctx.Done()
@@ -62,8 +55,6 @@ func (q *QoS2) Start(ctx context.Context) {
 }
 
 func (q *QoS2) pushMessage() {
-	var f func(i ...interface{})
-	defer q.StoreEvent.DeleteListenMessageStoreEvent(q.meta.topic, f)
 	for {
 		select {
 		case <-q.ctx.Done():
@@ -73,16 +64,31 @@ func (q *QoS2) pushMessage() {
 				return
 			}
 			msg.Packet.QoS = pkg.QoS2
-			q.writer.WritePacket(msg.Packet)
+			q.meta.writer.WritePacket(msg.Packet)
 			q.queue.WritePacket(msg)
 		default:
-			if err := q.StoreHelp.readStore(q.ctx, q.publishChan, q.meta.topic, q.meta.windowSize, false); err != nil {
-				logger.Logger.Error("QoS2: read store error = ", zap.Error(err), zap.String("topic", q.meta.topic))
+			if err := q.StoreHelp.readStore(q.ctx, q.meta.topic, q.meta.latestMessageID, q.meta.windowSize, false, q.writeToPublishChan); err != nil {
+				logger.Logger.Error("QoS2: read store error = ", zap.Error(err), zap.String("store", q.meta.topic))
 			}
 		}
 	}
 }
 
+func (q *QoS2) writeToPublishChan(message *packet.PublishMessage) {
+	select {
+	case q.publishChan <- message:
+		q.meta.latestMessageID = message.MessageID
+	default:
+
+	}
+}
+
+func (q *QoS2) readUnRecPacket() {
+	// TODO: read unRec packet
+}
+func (q *QoS2) readUnCompPacket() {
+	// TODO: implement read unComp packet
+}
 func (q *QoS2) Close() error {
 	q.cancel()
 	return nil
@@ -102,4 +108,12 @@ func (q *QoS2) HandelPublishComp(pubcomp *packets.Pubcomp) {
 
 func (q *QoS2) afterClose() error {
 	return nil
+}
+
+func (q *QoS2) GetUnFinish() []*UnFinishPacket {
+	return q.queue.getUnFinishPacket()
+}
+
+func (q *QoS2) GetUnCompPacketID() []string {
+	return q.queue.getUnCompPacketID()
 }

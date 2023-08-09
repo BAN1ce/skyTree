@@ -15,34 +15,27 @@ type StoreEvent interface {
 	DeleteListenMessageStoreEvent(topic string, handler func(i ...interface{}))
 }
 
-type QoS1MessageSession interface {
-	CreateTopicUnAckMessageID(topic string, messageID []string)
-	ReadTopicUnAckMessageID(topic string) []string
-}
-
 type QoS1 struct {
-	ctx                context.Context
-	cancel             context.CancelFunc
-	meta               *meta
-	publishChan        chan *packet.PublishMessage
-	publishQueue       *PublishQueue
-	lastAckedMessageID string
-	writer             PublishWriter
-	QoS1MessageSession
+	ctx          context.Context
+	cancel       context.CancelFunc
+	meta         *meta
+	publishChan  chan *packet.PublishMessage
+	publishQueue *PublishQueue
+	prepareMeta  PrepareMetaData
 	*StoreHelp
 }
 
-func NewQos1(topic string, unAckSession QoS1MessageSession, writer PublishWriter, help *StoreHelp) *QoS1 {
+func NewQos1(topic string, writer PublishWriter, help *StoreHelp, data PrepareMetaData) *QoS1 {
+	latestMessageID, _ := data.ReadTopicLatestPushedMessageID(topic)
 	t := &QoS1{
 		meta: &meta{
-			topic:  topic,
-			qos:    pkg.QoS1,
-			writer: writer,
+			topic:           topic,
+			qos:             pkg.QoS1,
+			writer:          writer,
+			latestMessageID: latestMessageID,
 		},
-		QoS1MessageSession: unAckSession,
-		writer:             writer,
-		publishQueue:       NewPublishQueue(writer),
-		StoreHelp:          help,
+		publishQueue: NewPublishQueue(writer),
+		StoreHelp:    help,
 	}
 	return t
 }
@@ -68,11 +61,10 @@ func (q *QoS1) Start(ctx context.Context) {
 }
 
 func (q *QoS1) readSessionUnAck() {
-	messageID := q.QoS1MessageSession.ReadTopicUnAckMessageID(q.meta.topic)
-	for _, id := range messageID {
+	for _, id := range q.prepareMeta.ReadTopicUnAckMessageID(q.meta.topic) {
 		msg, err := q.ClientMessageStore.ReadTopicMessagesByID(context.TODO(), q.meta.topic, id, 1, true)
 		if err != nil {
-			logger.Logger.Error("read client.proto unAck publishChan message error", zap.Error(err), zap.String("topic", q.meta.topic), zap.String("messageID", id))
+			logger.Logger.Error("read client.proto unAck publishChan message error", zap.Error(err), zap.String("store", q.meta.topic), zap.String("messageID", id))
 			continue
 		}
 		for _, m := range msg {
@@ -83,13 +75,11 @@ func (q *QoS1) readSessionUnAck() {
 
 func (q *QoS1) HandlePublishAck(puback *packets.Puback) {
 	if !q.publishQueue.HandlePublishAck(puback) {
-		logger.Logger.Warn("QoS1: handle publish ack failed, packetID not found", zap.Uint16("packetID", puback.PacketID), zap.String("topic", q.meta.topic))
+		logger.Logger.Warn("QoS1: handle publish ack failed, packetID not found", zap.Uint16("packetID", puback.PacketID), zap.String("store", q.meta.topic))
 	}
 }
 
 func (q *QoS1) pushMessage() {
-	var f func(i ...interface{})
-	defer q.StoreEvent.DeleteListenMessageStoreEvent(q.meta.topic, f)
 	for {
 		select {
 		case <-q.ctx.Done():
@@ -99,13 +89,22 @@ func (q *QoS1) pushMessage() {
 				return
 			}
 			msg.Packet.QoS = pkg.QoS1
-			q.writer.WritePacket(msg.Packet)
+			q.meta.writer.WritePacket(msg.Packet)
 			q.publishQueue.WritePacket(msg)
 		default:
-			if err := q.StoreHelp.readStore(q.ctx, q.publishChan, q.meta.topic, q.meta.windowSize, false); err != nil {
-				logger.Logger.Error("QoS2: read store error = ", zap.Error(err), zap.String("topic", q.meta.topic))
+			if err := q.StoreHelp.readStore(q.ctx, q.meta.topic, q.meta.latestMessageID, q.meta.windowSize, false, q.writeToPublishChan); err != nil {
+				logger.Logger.Error("QoS2: read store error = ", zap.Error(err), zap.String("store", q.meta.topic))
 			}
 		}
+	}
+}
+
+func (q *QoS1) writeToPublishChan(message *packet.PublishMessage) {
+	select {
+	case q.publishChan <- message:
+		q.meta.latestMessageID = message.MessageID
+	default:
+
 	}
 }
 
@@ -120,8 +119,6 @@ func (q *QoS1) Close() error {
 // afterClose save unAck messageID to client.proto when exit
 // should be call after close and only call once
 func (q *QoS1) afterClose() error {
-	// save unAck messageID to client.proto when exit
-	q.QoS1MessageSession.CreateTopicUnAckMessageID(q.meta.topic, q.publishQueue.GetUnAckMessageID())
 	return q.publishQueue.Close()
 }
 
@@ -133,4 +130,16 @@ func (q *QoS1) HandlePublishRec(pubrec *packets.Pubrec) {
 func (q *QoS1) HandelPublishComp(pubcomp *packets.Pubcomp) {
 	// do nothing
 	return
+}
+
+func (q *QoS1) GetUnAckedMessageID() []string {
+	return q.publishQueue.GetUnAckMessageID()
+}
+
+func (q *QoS1) GetUnRecMessageID() []string {
+	return nil
+}
+
+func (q *QoS1) GetUnCompPacketID() []string {
+	return nil
 }

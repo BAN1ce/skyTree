@@ -127,17 +127,3 @@ func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client
 	client.SetID(clientID)
 	return nil
 }
-
-func (c *ConnectHandler) handleWill(broker *Broker, client *client2.Client, packet packets.Connect) (byte, error) {
-	if !packet.WillFlag {
-		return packets.ConnackSuccess, nil
-	}
-	// var (
-	// 	willTopic      = packet.WillTopic
-	// 	willMessage    = packet.WillMessage
-	// 	willQos        = packet.WillQOS
-	// 	willRetain     = packet.WillRetain
-	// 	willProperties = packet2.PropertyToWillProperties(packet.Properties)
-	// )
-	return packets.ConnackSuccess, nil
-}

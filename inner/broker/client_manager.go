@@ -7,30 +7,30 @@ import (
 	"go.uber.org/zap"
 )
 
-type Manager struct {
+type ClientManager struct {
 	clients map[string]*client.Client
 }
 
-func NewManager() *Manager {
+func NewClientManager() *ClientManager {
 	var (
-		c = &Manager{
+		c = &ClientManager{
 			clients: map[string]*client.Client{},
 		}
 	)
 	return c
 }
 
-func (c *Manager) CreateClient(client *client.Client) {
+func (c *ClientManager) CreateClient(client *client.Client) {
 	c.createClient(client)
 }
 
-func (c *Manager) DeleteClient(clientID string) {
+func (c *ClientManager) DeleteClient(clientID string) {
 	if client2, ok := c.clients[clientID]; ok {
 		c.deleteClient(client2)
 	}
 }
 
-func (c *Manager) createClient(client *client.Client) {
+func (c *ClientManager) createClient(client *client.Client) {
 	if tmp, ok := c.clients[client.ID]; ok {
 		if tmp != client {
 			tmp.Close()
@@ -40,7 +40,7 @@ func (c *Manager) createClient(client *client.Client) {
 }
 
 // deleteClient delete client from client manager and close client
-func (c *Manager) deleteClient(client *client.Client) {
+func (c *ClientManager) deleteClient(client *client.Client) {
 	if tmp, ok := c.clients[client.ID]; ok {
 		if tmp == client {
 			client.Close()
@@ -50,14 +50,14 @@ func (c *Manager) deleteClient(client *client.Client) {
 	}
 }
 
-func (c *Manager) ReadClient(clientID string) (*client.Client, bool) {
+func (c *ClientManager) ReadClient(clientID string) (*client.Client, bool) {
 	if client2, ok := c.clients[clientID]; ok {
 		return client2, true
 	}
 	return nil, false
 }
 
-func (c *Manager) Write(clientID string, packet packets.Packet) {
+func (c *ClientManager) Write(clientID string, packet packets.Packet) {
 	if client2, ok := c.clients[clientID]; ok {
 		client2.WritePacket(packet)
 	} else {

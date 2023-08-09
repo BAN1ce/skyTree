@@ -1,14 +1,5 @@
-Raft:
-  NodeID: 1234
-  ClusterID: 5678
-  CheckQuorum: true
-  ElectionRTT: 10
-  HeartbeatRTT: 2
-  SnapshotEntries: 10000
-  CompactionOverhead: 500
-  OrderedConfigChange: true
-  MaxInMemLogSize: 1048576
-  SnapshotCompressionType: gzip
 
-Server:
-  ListenAddr: "tcp://127.0.0.1:9526"
+
+
+
+

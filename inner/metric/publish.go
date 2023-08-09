@@ -7,9 +7,9 @@ var (
 //	})
 //
 //	SentTopicPublishCount = promauto.NewCounterVec(prometheus.CounterOpts{
-//		Name: "skytree.mqtt.topic.publish.count.sent",
-//		Help: "The total number of published messages belong a topic to client",
-//	}, []string{"topic"})
+//		Name: "skytree.mqtt.store.publish.count.sent",
+//		Help: "The total number of published messages belong a store to client",
+//	}, []string{"store"})
 )
 var (
 //	ReceivedPublishCount = promauto.NewCounter(prometheus.CounterOpts{
@@ -18,9 +18,9 @@ var (
 //	})
 //
 //	ReceiveTopicPublishCount = promauto.NewCounterVec(prometheus.CounterOpts{
-//		Name: "skytree.mqtt.topic.publish.count.received",
-//		Help: "The total number of received publish messages belong a topic from client",
-//	}, []string{"topic"})
+//		Name: "skytree.mqtt.store.publish.count.received",
+//		Help: "The total number of received publish messages belong a store from client",
+//	}, []string{"store"})
 )
 
 // TODO: add more metrics

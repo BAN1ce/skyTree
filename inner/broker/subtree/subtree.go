@@ -41,8 +41,10 @@ func (s *SubTree) CreateSub(clientID string, topics map[string]packets.SubOption
 }
 
 func (s *SubTree) DeleteSub(clientID string, topics []string) {
-	//TODO implement me
-	panic("implement me")
+	s.app.UnSubscribe(context.TODO(), &proto.UnSubRequest{
+		ClientID: clientID,
+		Topics:   topics,
+	})
 }
 
 func (s *SubTree) Match(topic string) (clientIDQos map[string]int32) {
@@ -54,7 +56,7 @@ func (s *SubTree) Match(topic string) (clientIDQos map[string]int32) {
 		Topic: topic,
 	})
 	if err != nil {
-		logger.Logger.Error("match topic failed", zap.String("topic", topic), zap.Error(err))
+		logger.Logger.Error("match store failed", zap.String("store", topic), zap.Error(err))
 		return
 	}
 	clientIDQos = map[string]int32{}

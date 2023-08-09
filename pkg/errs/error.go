@@ -21,6 +21,8 @@ var (
 	ErrPasswordWrong              = errors.New("password wrong")
 	ErrAuthHandlerNotSet          = errors.New("auth handler not set")
 	ErrClientClosed               = errors.New("client closed")
+	ErrTopicAliasNotFound         = errors.New("topic alias not found")
+	ErrTopicAliasInvalid          = errors.New("topic alias invalid")
 )
 
 var (

@@ -17,7 +17,7 @@ import (
 
 type Option func(*API)
 
-func WithClientManager(manager *broker.Manager) Option {
+func WithClientManager(manager *broker.ClientManager) Option {
 	return func(api *API) {
 		api.manager = manager
 	}
@@ -39,7 +39,7 @@ type API struct {
 	addr           string
 	httpServer     *echo.Echo
 	apiV1          *echo.Group
-	manager        *broker.Manager
+	manager        *broker.ClientManager
 	store          pkg.Store
 	sessionManager pkg.SessionManager
 }
@@ -83,7 +83,7 @@ func (a *API) storeAPI() {
 }
 func (a *API) sessionAPI() {
 	ctr := session.NewController(a.sessionManager)
-	a.apiV1.GET("/client.proto/:client_id", ctr.Info)
+	a.apiV1.GET("/session/:client_id", ctr.Info)
 
 }
 func (a *API) Name() string {

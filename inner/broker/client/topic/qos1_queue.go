@@ -8,13 +8,16 @@ import (
 	"github.com/BAN1ce/skyTree/pkg/retry"
 	"github.com/eclipse/paho.golang/packets"
 	"github.com/google/uuid"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"time"
 )
 
 type PublishQueue struct {
-	list   *list.List // publishTask
-	writer PublishWriter
+	list        *list.List // publishTask
+	writer      PublishWriter
+	index       atomic.Uint64
+	latestIndex uint64
 }
 
 /**
@@ -27,6 +30,7 @@ type publishTask struct {
 	packet    *packets.Publish
 	retryKey  string
 	messageID string
+	index     uint64
 }
 
 func NewPublishQueue(writer PublishWriter) *PublishQueue {
@@ -45,6 +49,7 @@ func (q *PublishQueue) WritePacket(packet *packet.PublishMessage) {
 		packet:    packet.Packet,
 		retryKey:  retryKey,
 		messageID: packet.MessageID,
+		index:     q.index.Add(1),
 	})
 	q.createRetry(retryKey, packet.Packet)
 }
@@ -73,6 +78,9 @@ func (q *PublishQueue) HandlePublishAck(publishAck *packets.Puback) bool {
 			logger.Logger.Debug("delete publish retry task: ", zap.String("retryKey", task.retryKey))
 			q.deleteElement(e)
 			success = true
+			if task.index > q.latestIndex {
+				q.latestIndex = task.index
+			}
 			break
 		}
 	}
@@ -91,6 +99,10 @@ func (q *PublishQueue) GetUnAckMessageID() []string {
 func (q *PublishQueue) deleteElement(e *list.Element) {
 	facade.GetPublishRetry().Delete(e.Value.(*publishTask).retryKey)
 	q.list.Remove(e)
+}
+
+func (q *PublishQueue) getLatestMessageID() {
+
 }
 
 func (q *PublishQueue) createRetry(retryKey string, packet *packets.Publish) {

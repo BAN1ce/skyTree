@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"github.com/BAN1ce/skyTree/inner/api/base"
 	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/labstack/echo/v4"
 	"time"
@@ -40,12 +39,13 @@ func (c *Controller) Get(ctx echo.Context) error {
 	for _, v := range message {
 		messageID = append(messageID, v.MessageID)
 	}
-	return ctx.JSON(200, base.WithData(getData{
-		Page: base.Page{
-			Page:     req.Page,
-			PageSize: req.PageSize,
-			Total:    len(messageID),
-		},
-		Data: messageID,
-	}))
+	return nil
+	//return ctx.JSON(200, base.WithData(getData{
+	//	Page: base.Page{
+	//		Page:     req.Page,
+	//		PageSize: req.PageSize,
+	//		Total:    len(messageID),
+	//	},
+	//	Data: messageID,
+	//}))
 }

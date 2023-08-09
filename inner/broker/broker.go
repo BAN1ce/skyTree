@@ -44,7 +44,7 @@ type Broker struct {
 	userAuth       middleware.UserAuth
 	subTree        pkg.SubTree
 	store          *store.Wrapper
-	clientManager  *Manager
+	clientManager  *ClientManager
 	sessionManager pkg.SessionManager
 	publishPool    *pool.Publish
 	publishRetry   facade.RetrySchedule
@@ -76,7 +76,7 @@ func NewBroker(option ...Option) *Broker {
 }
 
 func (b *Broker) Name() string {
-	return "broker"
+	return "store"
 }
 
 func (b *Broker) Start(ctx context.Context) error {

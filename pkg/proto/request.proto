@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package request;
+option go_package = "./api;api";
+
+message SubscribeRequest {
+  string ClientID = 1;
+  map<string, int32> Topics = 2;
+}
+
+message GetSubscribedTopicsRequest {
+  string ClientID = 1;
+}
+
+message UnsubscribeRequest {
+  string ClientID = 1;
+  map<string, int32> Topics = 2;
+}
+
+message CreateUnAckMessageIDRequest {
+  string ClientID = 1;
+  string Topic = 2;
+  repeated string MessageID = 3;
+}
+
+message DeleteUnAckMessageIDRequest {
+  string ClientID = 1;
+  string Topic = 2;
+  repeated string MessageID = 3;
+}
+
+message SetLastAckMessageIDRequest {
+  string ClientID = 1;
+  string Topic = 2;
+  string MessageID = 3;
+}
+
+message GetLastAckMessageIDRequest {
+  string ClientID = 1;
+  string Topic = 2;
+}

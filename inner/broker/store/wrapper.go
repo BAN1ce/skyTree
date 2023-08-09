@@ -28,14 +28,14 @@ func (s *Wrapper) StorePublishPacket(packet *packets.Publish) (messageID string,
 	defer pool.ByteBufferPool.Put(encodedData)
 	_, err = packet.WriteTo(encodedData)
 	if err != nil {
-		logger.Logger.Error("encode packet error = ", zap.Error(err), zap.String("topic", topic))
+		logger.Logger.Error("encode packet error = ", zap.Error(err), zap.String("store", topic))
 		return
 	}
 	messageID, err = s.CreatePacket(topic, encodedData.Bytes())
 	if err != nil {
-		logger.Logger.Error("create packet to store error = ", zap.Error(err), zap.String("topic", topic))
+		logger.Logger.Error("create packet to store error = ", zap.Error(err), zap.String("store", topic))
 	} else {
-		logger.Logger.Debug("create packet to store success", zap.String("topic", topic), zap.String("messageID", messageID))
+		logger.Logger.Debug("create packet to store success", zap.String("store", topic), zap.String("messageID", messageID))
 		// emit store event
 		event2.GlobalEvent.EmitStoreMessage(topic, messageID)
 	}

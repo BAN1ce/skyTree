@@ -8,11 +8,11 @@ type SessionKey string
 
 type Session interface {
 	SessionTopic
-	Release() error
+	Release()
 }
 
 type SessionTopic interface {
-	ReadSubTopics() map[string]int32
+	ReadSubTopics() (topics map[string]int32)
 	CreateSubTopic(topic string, qos int32)
 	DeleteSubTopic(topic string)
 	SessionTopicMessage
@@ -22,20 +22,20 @@ type SessionTopicMessage interface {
 	/*
 		about un ack message id
 	*/
-	ReadTopicUnAckMessageID(topic string) []string
+	ReadTopicUnAckMessageID(topic string) (id []string)
 	CreateTopicUnAckMessageID(topic string, messageID []string)
 	DeleteTopicUnAckMessageID(topic string, messageID string)
 	/*
 		about un rec packet id
 	*/
-	ReadTopicUnRecPacketID(topic string) []string
+	ReadTopicUnRecPacketID(topic string) (packetID []string)
 	CreateTopicUnRecPacketID(topic string, packetID []string)
 	DeleteTopicUnRecPacketID(topic string, packetID string)
 
 	/*
 		about un comp packet id
 	*/
-	ReadTopicUnCompPacketID(topic string) []string
+	ReadTopicUnCompPacketID(topic string) (packetID []string)
 	CreateTopicUnCompPacketID(topic string, packetID []string)
 	DeleteTopicUnCompPacketID(topic string, packetID string)
 
@@ -43,9 +43,9 @@ type SessionTopicMessage interface {
 		about last acked message id
 	*/
 
-	ReadTopicLastAckedMessageID(topic string) (string, bool)
-	SetTopicLastAckedMessageID(topic string, messageID string)
-	DeleteTopicLastAckedMessageID(topic string, messageID string)
+	ReadTopicLatestPushedMessageID(topic string) (messageID string, ok bool)
+	SetTopicLatestPushedMessageID(topic string, messageID string)
+	DeleteTopicLatestPushedMessageID(topic string, messageID string)
 }
 
 type SessionMeta interface {

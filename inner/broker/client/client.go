@@ -45,6 +45,7 @@ type Client struct {
 	topics            *topic.Topics
 	identifierIDTopic map[uint16]string
 	QoS2              *HandleQoS2
+	topicAlias        map[uint16]string
 }
 
 func NewClient(conn net.Conn, option ...Option) *Client {
@@ -53,6 +54,7 @@ func NewClient(conn net.Conn, option ...Option) *Client {
 			conn:              conn,
 			options:           new(Options),
 			identifierIDTopic: map[uint16]string{},
+			topicAlias:        map[uint16]string{},
 		}
 	)
 	for _, o := range option {
@@ -107,7 +109,7 @@ func (c *Client) HandleUnSub(topicName string) {
 func (c *Client) HandlePubAck(pubAck *packets.Puback) {
 	topicName := c.identifierIDTopic[pubAck.PacketID]
 	if len(topicName) == 0 {
-		logger.Logger.Warn("pubAck packetID not found topic", zap.String("client", c.MetaString()), zap.Uint16("packetID", pubAck.PacketID))
+		logger.Logger.Warn("pubAck packetID not found store", zap.String("client", c.MetaString()), zap.Uint16("packetID", pubAck.PacketID))
 		return
 	}
 	c.topics.HandlePublishAck(topicName, pubAck)
@@ -116,7 +118,7 @@ func (c *Client) HandlePubAck(pubAck *packets.Puback) {
 func (c *Client) HandlePubRec(pubRec *packets.Pubrec) {
 	topicName := c.identifierIDTopic[pubRec.PacketID]
 	if len(topicName) == 0 {
-		logger.Logger.Warn("pubRec packetID not found topic", zap.String("client", c.MetaString()), zap.Uint16("packetID", pubRec.PacketID))
+		logger.Logger.Warn("pubRec packetID not found store", zap.String("client", c.MetaString()), zap.Uint16("packetID", pubRec.PacketID))
 		return
 	}
 	c.topics.HandlePublishRec(topicName, pubRec)
@@ -125,7 +127,7 @@ func (c *Client) HandlePubRec(pubRec *packets.Pubrec) {
 func (c *Client) HandlePubComp(pubRel *packets.Pubcomp) {
 	topicName := c.identifierIDTopic[pubRel.PacketID]
 	if len(topicName) == 0 {
-		logger.Logger.Warn("pubComp packetID not found topic", zap.String("client", c.MetaString()), zap.Uint16("packetID", pubRel.PacketID))
+		logger.Logger.Warn("pubComp packetID not found store", zap.String("client", c.MetaString()), zap.Uint16("packetID", pubRel.PacketID))
 		return
 	}
 	c.topics.HandelPublishComp(topicName, pubRel)
@@ -179,7 +181,7 @@ func (c *Client) writePacket(packet packets.Packet) {
 	switch p := packet.(type) {
 	case *packets.Publish:
 		p.PacketID = c.packetIDFactory.Generate()
-		logger.Logger.Debug("publish to client", zap.Uint16("packetID", p.PacketID), zap.String("client", c.MetaString()), zap.String("topic", p.Topic))
+		logger.Logger.Debug("publish to client", zap.Uint16("packetID", p.PacketID), zap.String("client", c.MetaString()), zap.String("store", p.Topic))
 		c.identifierIDTopic[p.PacketID] = p.Topic
 		topicName = p.Topic
 	}
@@ -207,6 +209,12 @@ func (c *Client) SetWill() {
 
 }
 
+func (c *Client) SetTopicAlias(topic string, alias uint16) {
+	c.mux.Lock()
+	c.topicAlias[alias] = topic
+	c.mux.Unlock()
+}
+
 func (c *Client) SetConnectProperties(properties *packet.ConnectProperties) {
 	c.mux.Lock()
 	c.connectProperties = properties
@@ -227,4 +235,10 @@ func (c *Client) MetaString() string {
 	s.WriteString("remoteAddr: ")
 	s.WriteString(c.conn.RemoteAddr().String())
 	return s.String()
+}
+
+func (c *Client) GetTopicAlias(u uint16) string {
+	c.mux.RLock()
+	defer c.mux.RUnlock()
+	return c.topicAlias[u]
 }

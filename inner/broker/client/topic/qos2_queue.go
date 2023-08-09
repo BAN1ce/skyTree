@@ -2,6 +2,7 @@ package topic
 
 import (
 	"container/list"
+	"fmt"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/packet"
@@ -57,6 +58,7 @@ func (q *QoS2Queue) WritePublishRel(packetID uint16) {
 		}
 		publishRel = packets.NewControlPacket(packets.PUBREL).Content.(*packets.Pubrel)
 	)
+	q.list.PushBack(task)
 	task.received.Store(true)
 	publishRel.PacketID = packetID
 	q.writer.WritePacket(publishRel)
@@ -102,14 +104,6 @@ func (q *QoS2Queue) HandlePublishComp(pubcomp *packets.Pubcomp) {
 	}
 }
 
-func (q *QoS2Queue) GetUnFinishMessage() []string {
-	var messageIDs []string
-	for e := q.list.Front(); e != nil; e = e.Next() {
-		messageIDs = append(messageIDs, e.Value.(*QoS2Task).messageID)
-	}
-	return messageIDs
-}
-
 func (q *QoS2Queue) deleteElement(e *list.Element) {
 	facade.GetPublishRetry().Delete(e.Value.(*QoS2Task).retryKey)
 	q.list.Remove(e)
@@ -143,4 +137,45 @@ func (q *QoS2Queue) createRetry(retryKey string, packet *QoS2Task) {
 	if err != nil {
 		logger.Logger.Error("create retry task error: ", zap.Error(err), zap.String("retryKey", retryKey))
 	}
+}
+
+type UnFinishPacket struct {
+	MessageID  string
+	PacketID   string
+	IsReceived bool
+}
+
+func (q *QoS2Queue) getUnFinishPacket() []*UnFinishPacket {
+	var unFinishPackets []*UnFinishPacket
+	for e := q.list.Front(); e != nil; e = e.Next() {
+		task := e.Value.(*QoS2Task)
+		unFinishPackets = append(unFinishPackets, &UnFinishPacket{
+			MessageID:  task.messageID,
+			PacketID:   fmt.Sprintf("%d", task.packetID),
+			IsReceived: task.received.Load(),
+		})
+	}
+	return unFinishPackets
+}
+
+func (q *QoS2Queue) getUnRecMessageID() []string {
+	var messageIDs []string
+	for e := q.list.Front(); e != nil; e = e.Next() {
+		task := e.Value.(*QoS2Task)
+		if !task.received.Load() {
+			messageIDs = append(messageIDs, task.messageID)
+		}
+	}
+	return messageIDs
+}
+
+func (q *QoS2Queue) getUnCompPacketID() []string {
+	var packetIDs []string
+	for e := q.list.Front(); e != nil; e = e.Next() {
+		task := e.Value.(*QoS2Task)
+		if task.received.Load() {
+			packetIDs = append(packetIDs, fmt.Sprintf("%d", task.packetID))
+		}
+	}
+	return packetIDs
 }

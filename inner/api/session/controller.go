@@ -35,7 +35,7 @@ func (c *Controller) Info(ctx echo.Context) error {
 	var data infoData
 
 	for topic, qos := range session.ReadSubTopics() {
-		lastMessageID, _ := session.ReadTopicLastAckedMessageID(topic)
+		lastMessageID, _ := session.ReadTopicLatestPushedMessageID(topic)
 		data.SubTopic = append(data.SubTopic, subTopic{
 			Topic:          topic,
 			Qos:            int(qos),
@@ -44,5 +44,5 @@ func (c *Controller) Info(ctx echo.Context) error {
 		})
 	}
 	data.ClientID = req.ClientID
-	return ctx.JSON(200, base.WithData(data))
+	return ctx.JSON(200, withInfoData(data))
 }

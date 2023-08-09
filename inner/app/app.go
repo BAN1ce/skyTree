@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	app2 "github.com/BAN1ce/Tree/app"
+	store2 "github.com/BAN1ce/Tree/state/store"
 	"github.com/BAN1ce/skyTree/config"
 	"github.com/BAN1ce/skyTree/inner/api"
 	"github.com/BAN1ce/skyTree/inner/broker"
@@ -37,12 +38,18 @@ func NewApp() *App {
 	var (
 		subTree = app2.NewApp()
 	)
-	if err := subTree.StartTopicCluster(context.TODO()); err != nil {
-		log.Fatal("start topic cluster failed", err)
+	if err := subTree.StartTopicCluster(context.TODO(), []app2.Option{
+		app2.WithInitMember(config.GetTree().InitNode),
+		app2.WithJoin(false),
+		app2.WithNodeConfig(config.GetTree().NodeHostConfig),
+		app2.WithConfig(config.GetTree().DragonboatConfig),
+		app2.WithStateMachine(store2.NewState()),
+	}...); err != nil {
+		log.Fatal("start store cluster failed", err)
 	}
 	var (
-		clientManager  = broker.NewManager()
-		sessionManager = session.NewSessionManager()
+		clientManager  = broker.NewClientManager()
+		sessionManager = session.NewSessions(subTree)
 		dbStore        = store.NewLocalStore(nutsdb.Options{
 			EntryIdxMode: nutsdb.HintKeyValAndRAMIdxMode,
 			SegmentSize:  nutsdb.MB * 256,

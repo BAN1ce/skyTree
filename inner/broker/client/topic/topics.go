@@ -2,6 +2,7 @@ package topic
 
 import (
 	"context"
+	"fmt"
 	"github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
@@ -70,7 +71,7 @@ func NewTopicWithSession(ctx context.Context, session pkg.SessionTopic, op ...Op
 	t := NewTopics(ctx, op...)
 	t.session = session
 	for topic, qos := range session.ReadSubTopics() {
-		logger.Logger.Debug("read topic from client.proto = ", zap.String("topic", topic), zap.Int32("qos", qos))
+		logger.Logger.Debug("read store from client.proto = ", zap.String("store", topic), zap.Int32("qos", qos))
 		t.CreateTopic(topic, pkg.Int32ToQoS(qos))
 
 	}
@@ -83,21 +84,21 @@ func (t *Topics) CreateTopic(topicName string, qos pkg.QoS) {
 	)
 	if t, ok := t.topic[topicName]; ok {
 		if err := t.Close(); err != nil {
-			logger.Logger.Warn("close topic error = ", zap.Error(err))
+			logger.Logger.Warn("close store error = ", zap.Error(err))
 		}
 	}
 	switch qos {
 	case pkg.QoS0:
-		logger.Logger.Debug("create topic with QoS0", zap.String("topic", topicName))
+		logger.Logger.Debug("create store with QoS0", zap.String("store", topicName))
 		topic = t.createQoS0Topic(topicName)
 	case pkg.QoS1:
-		logger.Logger.Debug("create topic with QoS1", zap.String("topic", topicName))
+		logger.Logger.Debug("create store with QoS1", zap.String("store", topicName))
 		topic = t.createQoS1Topic(topicName, t.writer)
 	case pkg.QoS2:
-		logger.Logger.Debug("create topic with QoS2", zap.String("topic", topicName))
+		logger.Logger.Debug("create store with QoS2", zap.String("store", topicName))
 		topic = t.createQoS2Topic(topicName, t.writer)
 	default:
-		logger.Logger.Warn("create topic with wrong QoS ", zap.Uint8("qos", uint8(qos)))
+		logger.Logger.Warn("create store with wrong QoS ", zap.Uint8("qos", uint8(qos)))
 		return
 	}
 	t.session.CreateSubTopic(topicName, int32(qos))
@@ -128,17 +129,19 @@ func (t *Topics) createQoS0Topic(topicName string) Topic {
 }
 
 func (t *Topics) createQoS1Topic(topicName string, writer PublishWriter) Topic {
-	return NewQos1(topicName, t.session, writer, NewStoreHelp(t.store, event.GlobalEvent, ""))
+	return NewQos1(topicName, writer, NewStoreHelp(t.store, event.GlobalEvent, func(latestMessageID string) {
+		t.session.SetTopicLatestPushedMessageID(topicName, latestMessageID)
+	}), t.session)
 }
 
 func (t *Topics) createQoS2Topic(topicName string, writer PublishWriter) Topic {
-	return NewQos2(topicName, writer, NewStoreHelp(t.store, event.GlobalEvent, ""))
+	return NewQos2(topicName, writer, NewStoreHelp(t.store, event.GlobalEvent), t.session)
 }
 
 func (t *Topics) DeleteTopic(topicName string) {
 	if _, ok := t.topic[topicName]; ok {
 		if err := t.topic[topicName].Close(); err != nil {
-			logger.Logger.Warn("topics close topic failed", zap.Error(err), zap.String("topic", topicName))
+			logger.Logger.Warn("topics close store failed", zap.Error(err), zap.String("store", topicName))
 		}
 		delete(t.topic, topicName)
 	}
@@ -149,8 +152,23 @@ func (t *Topics) Close() error {
 	if t == nil {
 		return nil
 	}
-	for topicName := range t.topic {
+	for topicName, topic := range t.topic {
 		t.DeleteTopic(topicName)
+		switch tmp := topic.(type) {
+		case *QoS1:
+			t.session.CreateTopicUnAckMessageID(topicName, tmp.GetUnAckedMessageID())
+		case *QoS2:
+			for _, packet := range tmp.GetUnFinish() {
+				if packet.IsReceived {
+					t.session.CreateTopicUnCompPacketID(topicName, []string{packet.PacketID})
+				} else {
+					t.session.CreateTopicUnRecPacketID(topicName, []string{packet.MessageID})
+				}
+			}
+		case *QoS0:
+		default:
+			logger.Logger.Error("unknown topic type", zap.String("type", fmt.Sprintf("%T", tmp)))
+		}
 	}
 	return nil
 }

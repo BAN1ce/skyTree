@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	app2 "github.com/BAN1ce/skyTree/inner/app"
 	"github.com/BAN1ce/skyTree/logger"
@@ -19,6 +20,7 @@ import (
 
 // @securityDefinitions.basic  BasicAuth
 func main() {
+	flag.Parse()
 	var (
 		app         = app2.NewApp()
 		ctx, cancel = context.WithCancel(context.Background())
