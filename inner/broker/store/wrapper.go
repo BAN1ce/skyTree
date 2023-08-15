@@ -3,7 +3,7 @@ package store
 import (
 	event2 "github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/logger"
-	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/eclipse/paho.golang/packets"
 	"go.uber.org/zap"
@@ -11,10 +11,10 @@ import (
 
 // Wrapper is a wrapper of pkg.Store
 type Wrapper struct {
-	pkg.Store
+	broker.Store
 }
 
-func NewStoreWrapper(store pkg.Store) *Wrapper {
+func NewStoreWrapper(store broker.Store) *Wrapper {
 	return &Wrapper{Store: store}
 }
 

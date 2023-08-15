@@ -3,7 +3,7 @@ package topic
 import (
 	"context"
 	"github.com/BAN1ce/skyTree/logger"
-	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"go.uber.org/zap"
 )
@@ -15,11 +15,11 @@ type HandleStoreReadDone func(latestMessageID string)
 // It will listen the store event when store is empty, and read the message from the store when the event is triggered.
 type StoreHelp struct {
 	StoreEvent
-	pkg.ClientMessageStore
+	broker.ClientMessageStore
 	handleStoreReadDone []HandleStoreReadDone
 }
 
-func NewStoreHelp(store pkg.ClientMessageStore, event StoreEvent, done ...HandleStoreReadDone) *StoreHelp {
+func NewStoreHelp(store broker.ClientMessageStore, event StoreEvent, done ...HandleStoreReadDone) *StoreHelp {
 	return &StoreHelp{
 		StoreEvent:          event,
 		ClientMessageStore:  store,

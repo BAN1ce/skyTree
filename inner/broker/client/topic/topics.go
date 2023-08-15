@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/logger"
-	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/eclipse/paho.golang/packets"
 	"go.uber.org/zap"
 )
@@ -13,7 +13,11 @@ import (
 type Topic interface {
 	Start(ctx context.Context)
 	Close() error
+}
+type QoS1Handle interface {
 	HandlePublishAck(puback *packets.Puback)
+}
+type QoS2Handle interface {
 	HandlePublishRec(pubrec *packets.Pubrec)
 	HandelPublishComp(pubcomp *packets.Pubcomp)
 }
@@ -29,7 +33,7 @@ type PublishWriter interface {
 
 type Option func(topics *Topics)
 
-func WithStore(store pkg.ClientMessageStore) Option {
+func WithStore(store broker.ClientMessageStore) Option {
 	return func(topic *Topics) {
 		topic.store = store
 	}
@@ -50,8 +54,8 @@ func WithWindowSize(size int) Option {
 type Topics struct {
 	ctx        context.Context
 	topic      map[string]Topic
-	session    pkg.SessionTopic
-	store      pkg.ClientMessageStore
+	session    broker.SessionTopic
+	store      broker.ClientMessageStore
 	writer     PublishWriter
 	windowSize int
 }
@@ -67,18 +71,18 @@ func NewTopics(ctx context.Context, ops ...Option) *Topics {
 	return t
 }
 
-func NewTopicWithSession(ctx context.Context, session pkg.SessionTopic, op ...Option) *Topics {
+func NewTopicWithSession(ctx context.Context, session broker.SessionTopic, op ...Option) *Topics {
 	t := NewTopics(ctx, op...)
 	t.session = session
 	for topic, qos := range session.ReadSubTopics() {
 		logger.Logger.Debug("read store from client.proto = ", zap.String("store", topic), zap.Int32("qos", qos))
-		t.CreateTopic(topic, pkg.Int32ToQoS(qos))
+		t.CreateTopic(topic, broker.Int32ToQoS(qos))
 
 	}
 	return t
 }
 
-func (t *Topics) CreateTopic(topicName string, qos pkg.QoS) {
+func (t *Topics) CreateTopic(topicName string, qos broker.QoS) {
 	var (
 		topic Topic
 	)
@@ -88,13 +92,13 @@ func (t *Topics) CreateTopic(topicName string, qos pkg.QoS) {
 		}
 	}
 	switch qos {
-	case pkg.QoS0:
+	case broker.QoS0:
 		logger.Logger.Debug("create store with QoS0", zap.String("store", topicName))
 		topic = t.createQoS0Topic(topicName)
-	case pkg.QoS1:
+	case broker.QoS1:
 		logger.Logger.Debug("create store with QoS1", zap.String("store", topicName))
 		topic = t.createQoS1Topic(topicName, t.writer)
-	case pkg.QoS2:
+	case broker.QoS2:
 		logger.Logger.Debug("create store with QoS2", zap.String("store", topicName))
 		topic = t.createQoS2Topic(topicName, t.writer)
 	default:
@@ -108,20 +112,32 @@ func (t *Topics) CreateTopic(topicName string, qos pkg.QoS) {
 
 func (t *Topics) HandlePublishAck(topic string, puback *packets.Puback) {
 	if topic, ok := t.topic[topic]; ok {
-		topic.HandlePublishAck(puback)
+		if t, ok := topic.(QoS1Handle); ok {
+			t.HandlePublishAck(puback)
+			return
+		}
 	}
+	logger.Logger.Warn("handle publish Ack failed, maybe topic not exists or handle type error")
 }
 
 func (t *Topics) HandlePublishRec(topic string, pubrec *packets.Pubrec) {
 	if topic, ok := t.topic[topic]; ok {
-		topic.HandlePublishRec(pubrec)
+		if t, ok := topic.(QoS2Handle); ok {
+			t.HandlePublishRec(pubrec)
+			return
+		}
 	}
+	logger.Logger.Warn("handle publish Rec failed, maybe topic not exists or handle type error")
 }
 
 func (t *Topics) HandelPublishComp(topic string, pubcomp *packets.Pubcomp) {
 	if topic, ok := t.topic[topic]; ok {
-		topic.HandelPublishComp(pubcomp)
+		if t, ok := topic.(QoS2Handle); ok {
+			t.HandelPublishComp(pubcomp)
+			return
+		}
 	}
+	logger.Logger.Warn("handle publish Comp failed, maybe topic not exists or handle type error")
 }
 
 func (t *Topics) createQoS0Topic(topicName string) Topic {

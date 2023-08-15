@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/BAN1ce/skyTree/config"
 	"github.com/BAN1ce/skyTree/logger"
-	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/eclipse/paho.golang/packets"
 	"go.uber.org/zap"
@@ -21,16 +21,16 @@ type QoS1 struct {
 	meta         *meta
 	publishChan  chan *packet.PublishMessage
 	publishQueue *PublishQueue
-	prepareMeta  PrepareMetaData
+	session      QoS1Session
 	*StoreHelp
 }
 
-func NewQos1(topic string, writer PublishWriter, help *StoreHelp, data PrepareMetaData) *QoS1 {
-	latestMessageID, _ := data.ReadTopicLatestPushedMessageID(topic)
+func NewQos1(topic string, writer PublishWriter, help *StoreHelp, session QoS1Session) *QoS1 {
+	latestMessageID, _ := session.ReadTopicLatestPushedMessageID(topic)
 	t := &QoS1{
 		meta: &meta{
 			topic:           topic,
-			qos:             pkg.QoS1,
+			qos:             broker.QoS1,
 			writer:          writer,
 			latestMessageID: latestMessageID,
 		},
@@ -61,7 +61,7 @@ func (q *QoS1) Start(ctx context.Context) {
 }
 
 func (q *QoS1) readSessionUnAck() {
-	for _, id := range q.prepareMeta.ReadTopicUnAckMessageID(q.meta.topic) {
+	for _, id := range q.session.ReadTopicUnAckMessageID(q.meta.topic) {
 		msg, err := q.ClientMessageStore.ReadTopicMessagesByID(context.TODO(), q.meta.topic, id, 1, true)
 		if err != nil {
 			logger.Logger.Error("read client.proto unAck publishChan message error", zap.Error(err), zap.String("store", q.meta.topic), zap.String("messageID", id))
@@ -88,7 +88,7 @@ func (q *QoS1) pushMessage() {
 			if !ok {
 				return
 			}
-			msg.Packet.QoS = pkg.QoS1
+			msg.Packet.QoS = broker.QoS1
 			q.meta.writer.WritePacket(msg.Packet)
 			q.publishQueue.WritePacket(msg)
 		default:
@@ -119,27 +119,14 @@ func (q *QoS1) Close() error {
 // afterClose save unAck messageID to client.proto when exit
 // should be call after close and only call once
 func (q *QoS1) afterClose() error {
-	return q.publishQueue.Close()
-}
-
-func (q *QoS1) HandlePublishRec(pubrec *packets.Pubrec) {
-	// do nothing
-	return
-}
-
-func (q *QoS1) HandelPublishComp(pubcomp *packets.Pubcomp) {
-	// do nothing
-	return
+	if err := q.publishQueue.Close(); err != nil {
+		return err
+	}
+	q.session.CreateTopicUnAckMessageID(q.meta.topic, q.publishQueue.GetUnAckMessageID())
+	q.session.SetTopicLatestPushedMessageID(q.meta.topic, q.meta.latestMessageID)
+	return nil
 }
 
 func (q *QoS1) GetUnAckedMessageID() []string {
 	return q.publishQueue.GetUnAckMessageID()
-}
-
-func (q *QoS1) GetUnRecMessageID() []string {
-	return nil
-}
-
-func (q *QoS1) GetUnCompPacketID() []string {
-	return nil
 }

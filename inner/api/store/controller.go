@@ -2,16 +2,16 @@ package store
 
 import (
 	"context"
-	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/labstack/echo/v4"
 	"time"
 )
 
 type Controller struct {
-	pkg.ClientMessageStore
+	broker.ClientMessageStore
 }
 
-func NewController(store pkg.ClientMessageStore) *Controller {
+func NewController(store broker.ClientMessageStore) *Controller {
 	return &Controller{
 		ClientMessageStore: store,
 	}

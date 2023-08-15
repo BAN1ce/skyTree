@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/BAN1ce/skyTree/logger"
-	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/db"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/google/uuid"
@@ -109,7 +109,7 @@ func nutsDBValuesBeMessages(values []*zset.SortedSetNode, topic string) []packet
 		messages []packet.PublishMessage
 	)
 	for _, v := range values {
-		if pubPacket, err := pkg.Decode(v.Value); err != nil {
+		if pubPacket, err := broker.Decode(v.Value); err != nil {
 			logger.Logger.Error("read from Local decode error: ", zap.Error(err))
 			continue
 		} else {

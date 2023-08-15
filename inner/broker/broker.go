@@ -10,7 +10,7 @@ import (
 	"github.com/BAN1ce/skyTree/inner/broker/store"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/logger"
-	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/middleware"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/eclipse/paho.golang/packets"
@@ -42,10 +42,10 @@ type Broker struct {
 	ctx            context.Context
 	server         *server.Server
 	userAuth       middleware.UserAuth
-	subTree        pkg.SubTree
+	subTree        broker.SubCenter
 	store          *store.Wrapper
 	clientManager  *ClientManager
-	sessionManager pkg.SessionManager
+	sessionManager broker.SessionManager
 	publishPool    *pool.Publish
 	publishRetry   facade.RetrySchedule
 	preMiddleware  map[byte][]middleware.PacketMiddleware

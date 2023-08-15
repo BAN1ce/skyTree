@@ -1,4 +1,4 @@
-package pkg
+package broker
 
 import (
 	"time"
@@ -56,20 +56,3 @@ type SessionExpiry interface {
 	GetSessionExpiryInterval() uint32
 	SetSessionExpiryInterval(uint32)
 }
-
-// func SessionSetWillFlag(client.proto Session, willFlag string) {
-// 	client.proto.Set(WillFlag, willFlag)
-// }
-//
-// func SetWillPropertyToSession(client.proto Session, properties *packets.Properties) {
-// 	client.proto.Set(WillPropertyMessageExpiryInterval, cast.ToString(properties.MessageExpiry))
-// 	client.proto.Set(WillPropertyWillDelayInterval, cast.ToString(properties.WillDelayInterval))
-// 	client.proto.Set(WillPropertyPayloadFormatIndicator, cast.ToString(properties.PayloadFormat))
-// 	client.proto.Set(WillPropertyContentType, cast.ToString(properties.ContentType))
-// 	client.proto.Set(WillPropertyResponseTopic, cast.ToString(properties.ResponseTopic))
-// 	client.proto.Set(WillPropertyCorrelationData, cast.ToString(properties.CorrelationData))
-// 	client.proto.Set(WillPropertySubscriptionIdentifier, cast.ToString(properties.SubscriptionIdentifier))
-// 	for _, v := range properties.User {
-// 		client.proto.Set(SessionKey(fmt.Sprintf("%s,%s", WillPropertyUserProperty, v.Key)), cast.ToString(v.Value))
-// 	}
-// }

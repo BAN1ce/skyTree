@@ -1,7 +1,7 @@
 package client
 
 import (
-	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/broker"
 )
 
 type NotifyClientClose interface {
@@ -10,13 +10,13 @@ type NotifyClientClose interface {
 type Option func(*Options)
 
 type Options struct {
-	Store       pkg.ClientMessageStore
-	session     pkg.Session
+	Store       broker.ClientMessageStore
+	session     broker.Session
 	cfg         Config
 	notifyClose NotifyClientClose
 }
 
-func WithStore(store pkg.ClientMessageStore) Option {
+func WithStore(store broker.ClientMessageStore) Option {
 	return func(options *Options) {
 		options.Store = store
 	}

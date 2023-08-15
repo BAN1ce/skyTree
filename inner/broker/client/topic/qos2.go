@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/BAN1ce/skyTree/config"
 	"github.com/BAN1ce/skyTree/logger"
-	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/eclipse/paho.golang/packets"
 	"go.uber.org/zap"
@@ -24,7 +24,7 @@ func NewQos2(topic string, writer PublishWriter, help *StoreHelp, data PrepareMe
 	t := &QoS2{
 		meta: &meta{
 			topic:           topic,
-			qos:             pkg.QoS1,
+			qos:             broker.QoS1,
 			writer:          writer,
 			latestMessageID: latestMessageID,
 		},
@@ -63,7 +63,7 @@ func (q *QoS2) pushMessage() {
 			if !ok {
 				return
 			}
-			msg.Packet.QoS = pkg.QoS2
+			msg.Packet.QoS = broker.QoS2
 			q.meta.writer.WritePacket(msg.Packet)
 			q.queue.WritePacket(msg)
 		default:

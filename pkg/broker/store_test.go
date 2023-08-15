@@ -1,4 +1,4 @@
-package pkg
+package broker
 
 import (
 	"github.com/eclipse/paho.golang/packets"

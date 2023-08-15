@@ -8,7 +8,7 @@ import (
 	"github.com/BAN1ce/skyTree/inner/api/store"
 	"github.com/BAN1ce/skyTree/inner/broker"
 	"github.com/BAN1ce/skyTree/logger"
-	"github.com/BAN1ce/skyTree/pkg"
+	broker2 "github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/labstack/echo/v4"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	echoSwagger "github.com/swaggo/echo-swagger"
@@ -23,13 +23,13 @@ func WithClientManager(manager *broker.ClientManager) Option {
 	}
 }
 
-func WithSessionManager(sessionManager pkg.SessionManager) Option {
+func WithSessionManager(sessionManager broker2.SessionManager) Option {
 	return func(api *API) {
 		api.sessionManager = sessionManager
 	}
 }
 
-func WithStore(store pkg.Store) Option {
+func WithStore(store broker2.Store) Option {
 	return func(api *API) {
 		api.store = store
 	}
@@ -40,8 +40,8 @@ type API struct {
 	httpServer     *echo.Echo
 	apiV1          *echo.Group
 	manager        *broker.ClientManager
-	store          pkg.Store
-	sessionManager pkg.SessionManager
+	store          broker2.Store
+	sessionManager broker2.SessionManager
 }
 
 func NewAPI(addr string, option ...Option) *API {

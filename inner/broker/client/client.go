@@ -5,6 +5,7 @@ import (
 	"github.com/BAN1ce/skyTree/inner/broker/client/topic"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/BAN1ce/skyTree/pkg/state"
@@ -197,7 +198,7 @@ func (c *Client) writePacket(packet packets.Packet) {
 	}
 }
 
-func (c *Client) SetSession(session pkg.Session) error {
+func (c *Client) SetSession(session broker.Session) error {
 	c.mux.Lock()
 	c.options.session = session
 	c.topics = topic.NewTopicWithSession(c.ctx, c.options.session, topic.WithStore(c.options.Store), topic.WithWriter(c))

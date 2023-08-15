@@ -2,7 +2,7 @@ package session
 
 import (
 	"errors"
-	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/mock"
 	"github.com/golang/mock/gomock"
 	"reflect"
@@ -97,10 +97,10 @@ func TestSession_Release(t *testing.T) {
 	mockSessionStore.EXPECT().DeleteKey(gomock.Any(), "").Return(errors.New("delete key is empty")).AnyTimes()
 	mockSessionStore.EXPECT().DeleteKey(gomock.Any(), gomock.Eq(clientKey(clientID).String())).Return(nil).AnyTimes()
 
-	sessionStore := pkg.NewSessionStoreWithTimout(mockSessionStore, 10)
+	sessionStore := broker.NewSessionStoreWithTimout(mockSessionStore, 10)
 	type fields struct {
 		clientID string
-		store    *pkg.SessionStoreWithTimeout
+		store    *broker.SessionStoreWithTimeout
 	}
 	tests := []struct {
 		name   string
@@ -144,10 +144,10 @@ func TestSession_ReadSubTopics(t *testing.T) {
 	defer ctl.Finish()
 	mockSessionStore := mock.NewMockSessionStore(ctl)
 	mockSessionStore.EXPECT().ReadPrefixKey(gomock.Any(), gomock.Eq(clientSubTopicKeyPrefix(clientID))).Return(subTopics, nil).AnyTimes()
-	sessionStore := pkg.NewSessionStoreWithTimout(mockSessionStore, 10)
+	sessionStore := broker.NewSessionStoreWithTimout(mockSessionStore, 10)
 	type fields struct {
 		clientID string
-		store    *pkg.SessionStoreWithTimeout
+		store    *broker.SessionStoreWithTimeout
 	}
 	tests := []struct {
 		name       string
@@ -188,10 +188,10 @@ func TestSession_CreateSubTopic(t *testing.T) {
 	defer ctl.Finish()
 	mockSessionStore := mock.NewMockSessionStore(ctl)
 	mockSessionStore.EXPECT().PutKey(gomock.Any(), gomock.Eq(clientSubTopicKey(clientID, topic)), gomock.Eq("1")).Return(nil).AnyTimes()
-	sessionStore := pkg.NewSessionStoreWithTimout(mockSessionStore, 10)
+	sessionStore := broker.NewSessionStoreWithTimout(mockSessionStore, 10)
 	type fields struct {
 		clientID string
-		store    *pkg.SessionStoreWithTimeout
+		store    *broker.SessionStoreWithTimeout
 	}
 	type args struct {
 		topic string
@@ -245,10 +245,10 @@ func TestSession_DeleteSubTopic(t *testing.T) {
 	defer ctl.Finish()
 	mockSessionStore := mock.NewMockSessionStore(ctl)
 	mockSessionStore.EXPECT().DeleteKey(gomock.Any(), gomock.Eq(clientSubTopicKey(clientID, topic))).Return(nil).AnyTimes()
-	sessionStore := pkg.NewSessionStoreWithTimout(mockSessionStore, 10)
+	sessionStore := broker.NewSessionStoreWithTimout(mockSessionStore, 10)
 	type fields struct {
 		clientID string
-		store    *pkg.SessionStoreWithTimeout
+		store    *broker.SessionStoreWithTimeout
 	}
 	type args struct {
 		topic string
@@ -307,11 +307,11 @@ func TestSession_ReadTopicUnAckMessageID(t *testing.T) {
 	defer ctl.Finish()
 	mockSessionStore := mock.NewMockSessionStore(ctl)
 	mockSessionStore.EXPECT().ReadPrefixKey(gomock.Any(), gomock.Eq(clientTopicUnAckKeyPrefix(clientID, topic))).Return(keyValue, nil).AnyTimes()
-	sessionStore := pkg.NewSessionStoreWithTimout(mockSessionStore, 10)
+	sessionStore := broker.NewSessionStoreWithTimout(mockSessionStore, 10)
 
 	type fields struct {
 		clientID string
-		store    *pkg.SessionStoreWithTimeout
+		store    *broker.SessionStoreWithTimeout
 	}
 	type args struct {
 		topic string
@@ -376,10 +376,10 @@ func TestSession_CreateTopicUnAckMessageID(t *testing.T) {
 	mockSessionStore := mock.NewMockSessionStore(ctl)
 	mockSessionStore.EXPECT().PutKey(gomock.Any(), gomock.Eq(clientTopicUnAckKey(clientID, topic, messageID[0])), gomock.Eq(messageID[0])).Return(nil)
 	mockSessionStore.EXPECT().PutKey(gomock.Any(), gomock.Eq(clientTopicUnAckKey(clientID, topic, messageID[1])), gomock.Eq(messageID[1])).Return(nil)
-	sessionStore := pkg.NewSessionStoreWithTimout(mockSessionStore, 10)
+	sessionStore := broker.NewSessionStoreWithTimout(mockSessionStore, 10)
 	type fields struct {
 		clientID string
-		store    *pkg.SessionStoreWithTimeout
+		store    *broker.SessionStoreWithTimeout
 	}
 	type args struct {
 		topic     string
@@ -427,7 +427,7 @@ func TestSession_CreateTopicUnAckMessageID(t *testing.T) {
 func TestSession_DeleteTopicUnAckMessageID(t *testing.T) {
 	type fields struct {
 		clientID string
-		store    *pkg.SessionStoreWithTimeout
+		store    *broker.SessionStoreWithTimeout
 	}
 	type args struct {
 		topic     string

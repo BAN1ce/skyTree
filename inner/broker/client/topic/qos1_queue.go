@@ -14,10 +14,11 @@ import (
 )
 
 type PublishQueue struct {
-	list        *list.List // publishTask
-	writer      PublishWriter
-	index       atomic.Uint64
-	latestIndex uint64
+	list           *list.List // publishTask
+	writer         PublishWriter
+	index          atomic.Uint64
+	latestIndex    uint64
+	unAckMessageID []string
 }
 
 /**
@@ -56,6 +57,7 @@ func (q *PublishQueue) WritePacket(packet *packet.PublishMessage) {
 
 func (q *PublishQueue) Close() error {
 	for e := q.list.Front(); e != nil; e = e.Next() {
+		q.unAckMessageID = append(q.unAckMessageID, e.Value.(*publishTask).messageID)
 		q.deleteElement(e)
 	}
 	return nil
@@ -89,20 +91,12 @@ func (q *PublishQueue) HandlePublishAck(publishAck *packets.Puback) bool {
 
 // GetUnAckMessageID returns the message id those are not acked.
 func (q *PublishQueue) GetUnAckMessageID() []string {
-	var messageIDs []string
-	for e := q.list.Front(); e != nil; e = e.Next() {
-		messageIDs = append(messageIDs, e.Value.(*publishTask).messageID)
-	}
-	return messageIDs
+	return q.unAckMessageID
 }
 
 func (q *PublishQueue) deleteElement(e *list.Element) {
 	facade.GetPublishRetry().Delete(e.Value.(*publishTask).retryKey)
 	q.list.Remove(e)
-}
-
-func (q *PublishQueue) getLatestMessageID() {
-
 }
 
 func (q *PublishQueue) createRetry(retryKey string, packet *packets.Publish) {

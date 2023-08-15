@@ -2,12 +2,12 @@ package session
 
 import (
 	"github.com/BAN1ce/skyTree/inner/api/base"
-	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/labstack/echo/v4"
 )
 
 type Manager interface {
-	ReadSession(key string) (pkg.Session, bool)
+	ReadSession(key string) (broker.Session, bool)
 }
 type Controller struct {
 	manager Manager

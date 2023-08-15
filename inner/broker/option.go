@@ -3,7 +3,7 @@ package broker
 import (
 	"github.com/BAN1ce/skyTree/inner/broker/store"
 	"github.com/BAN1ce/skyTree/inner/facade"
-	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/middleware"
 )
 
@@ -21,7 +21,7 @@ func WithClientManager(manager *ClientManager) Option {
 	}
 }
 
-func WithSubTree(tree pkg.SubTree) Option {
+func WithSubTree(tree broker.SubCenter) Option {
 	return func(core *Broker) {
 		core.subTree = tree
 	}
@@ -39,7 +39,7 @@ func WithHandlers(handlers *Handlers) Option {
 	}
 }
 
-func WithSessionManager(manager pkg.SessionManager) Option {
+func WithSessionManager(manager broker.SessionManager) Option {
 	return func(broker *Broker) {
 		broker.sessionManager = manager
 	}

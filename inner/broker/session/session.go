@@ -2,7 +2,7 @@ package session
 
 import (
 	"github.com/BAN1ce/skyTree/logger"
-	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/broker"
 	"go.uber.org/zap"
 	"strconv"
 	"strings"
@@ -35,13 +35,13 @@ func withClientKey(key, clientID string) string {
 
 type Session struct {
 	clientID string
-	store    *pkg.SessionStoreWithTimeout
+	store    *broker.SessionStoreWithTimeout
 }
 
-func newSession(clientID string, store pkg.SessionStore) *Session {
+func newSession(clientID string, store broker.SessionStore) *Session {
 	return &Session{
 		clientID: clientID,
-		store: pkg.NewSessionStoreWithTimout(
+		store: broker.NewSessionStoreWithTimout(
 			store,
 			3*time.Second),
 	}

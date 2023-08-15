@@ -1,4 +1,4 @@
-package pkg
+package broker
 
 type SessionManager interface {
 	ReadSession(key string) (Session, bool)

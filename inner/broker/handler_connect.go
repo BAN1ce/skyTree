@@ -3,7 +3,7 @@ package broker
 import (
 	client2 "github.com/BAN1ce/skyTree/inner/broker/client"
 	"github.com/BAN1ce/skyTree/logger"
-	"github.com/BAN1ce/skyTree/pkg"
+	broker2 "github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/errs"
 	packet2 "github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/state"
@@ -95,7 +95,7 @@ func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client
 		clientID   = packet.ClientID
 		cleanStart = packet.CleanStart
 		err        error
-		session    pkg.Session
+		session    broker2.Session
 		exists     bool
 	)
 	if clientID == "" && !cleanStart {

@@ -4,3 +4,4 @@ data
 build/bin
 .run
 private
+snapshot

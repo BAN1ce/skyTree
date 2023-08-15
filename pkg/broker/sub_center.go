@@ -1,4 +1,4 @@
-package pkg
+package broker
 
 import "github.com/eclipse/paho.golang/packets"
 
@@ -10,23 +10,15 @@ const (
 	QoS2 = 2
 )
 
-func IsQoS0(qos byte) bool {
-	return qos == QoS0
-}
-
-func IsQoS1(qos byte) bool {
-	return qos == QoS1
-}
-
-func IsQos2(qos byte) bool {
-	return qos == QoS2
-}
-
+// SubClient is the interface of the subscription client.
 type SubClient interface {
 	GetClientID() string
 	GetQoS() int32
 }
-type SubTree interface {
+
+// SubCenter is the interface of the subscription center.
+// It is used to manage the subscription of the clients.
+type SubCenter interface {
 	CreateSub(clientID string, topics map[string]packets.SubOptions)
 	DeleteSub(clientID string, topics []string)
 	Match(topic string) (clientIDQos map[string]int32)

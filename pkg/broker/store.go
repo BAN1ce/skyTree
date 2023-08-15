@@ -1,7 +1,8 @@
-package pkg
+package broker
 
 import (
 	"context"
+	"fmt"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/eclipse/paho.golang/packets"
@@ -40,11 +41,12 @@ func Encode(publish *packets.Publish) ([]byte, error) {
 		bf = pool.ByteBufferPool.Get()
 	)
 	defer pool.ByteBufferPool.Put(bf)
-	if _, err := publish.WriteTo(bf); err != nil {
+	if n, err := publish.WriteTo(bf); err != nil {
 		return nil, err
-	} else {
-		return bf.Bytes(), nil
+	} else if n != int64(bf.Len()) {
+		return nil, fmt.Errorf("write to buffer error, expect %d, got %d", bf.Len(), n)
 	}
+	return bf.Bytes(), nil
 }
 
 // Decode bytes to publish packet

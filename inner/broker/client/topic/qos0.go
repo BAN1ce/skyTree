@@ -3,7 +3,7 @@ package topic
 import (
 	"context"
 	"github.com/BAN1ce/skyTree/logger"
-	"github.com/BAN1ce/skyTree/pkg"
+	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/eclipse/paho.golang/packets"
 	"go.uber.org/zap"
@@ -19,6 +19,8 @@ type PublishListener interface {
 
 // QoS0 is Topic with QoS0
 type QoS0 struct {
+	ctx             context.Context
+	cancel          context.CancelFunc
 	topic           string
 	writer          PublishWriter
 	publishListener PublishListener
@@ -35,20 +37,21 @@ func NewQoS0(topic string, writer PublishWriter, listener PublishListener) *QoS0
 // Start starts the QoS0 Topic, and it will block until the context is done.
 // It will create a publish event listener to listen the publish event of the store.
 func (t *QoS0) Start(ctx context.Context) {
+	t.ctx, t.cancel = context.WithCancel(ctx)
 	t.publishListener.CreatePublishEvent(t.topic, t.handler)
-	<-ctx.Done()
+	<-t.ctx.Done()
 	if err := t.Close(); err != nil {
 		logger.Logger.Warn("QoS0: close error", zap.Error(err))
 	}
 	t.afterClose()
 }
 
-func (t *QoS0) HandlePublishAck(puback *packets.Puback) {
-	// do nothing
-}
-
-// handler is the handler of the topic, it will be called when the event is triggered.
+// handler is the handler of the topic, it will be called when the published packet event is triggered.
 func (t *QoS0) handler(i ...interface{}) {
+	if t.ctx.Err() != nil {
+		logger.Logger.Warn("QoS0: handler error, context canceled", zap.Error(t.ctx.Err()), zap.String("topic", t.topic), zap.String("writer", t.writer.GetID()))
+		return
+	}
 	if len(i) == 2 {
 		topic, ok := i[0].(string)
 		if !ok {
@@ -64,16 +67,18 @@ func (t *QoS0) handler(i ...interface{}) {
 			return
 		}
 
+		// copy the published packet and set the QoS to QoS0
 		var publishPacket = pool.PublishPool.Get()
-		pub := copyPublish(publishPacket, p)
-		pub.QoS = pkg.QoS0
-		t.writer.WritePacket(pub)
-		pool.PublishPool.Put(pub)
+		pool.CopyPublish(publishPacket, p)
+		publishPacket.QoS = broker.QoS0
+		t.writer.WritePacket(publishPacket)
+		pool.PublishPool.Put(publishPacket)
 	}
 }
 
 // Close closes the QoS0
 func (t *QoS0) Close() error {
+	t.cancel()
 	return nil
 }
 
@@ -81,12 +86,4 @@ func (t *QoS0) Close() error {
 // It will delete the publish event listener.
 func (t *QoS0) afterClose() {
 	t.publishListener.DeletePublishEvent(t.topic, t.handler)
-}
-
-func (t *QoS0) HandlePublishRec(pubrec *packets.Pubrec) {
-	// do nothing
-}
-
-func (t *QoS0) HandelPublishComp(pubcomp *packets.Pubcomp) {
-	// do nothing
 }
