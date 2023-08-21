@@ -4,6 +4,7 @@ import (
 	"github.com/BAN1ce/skyTree/inner/broker/client"
 	"github.com/BAN1ce/skyTree/inner/broker/event"
 	"github.com/BAN1ce/skyTree/logger"
+	broker2 "github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/errs"
 	packet2 "github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/eclipse/paho.golang/packets"
@@ -59,9 +60,9 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 	event.Event.Emit(event.ReceivedTopicPublishEventName(topic), topic, packet)
 
 	switch qos {
-	case broker.QoS0:
+	case broker2.QoS0:
 		return
-	case broker.QoS1:
+	case broker2.QoS1:
 		if len(subClients) == 0 {
 			pubAck.ReasonCode = packets.PubackNoMatchingSubscribers
 			broker.writePacket(client, pubAck)
@@ -74,7 +75,7 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 			pubAck.ReasonCode = packets.PubackSuccess
 		}
 		client.WritePacket(pubAck)
-	case broker.QoS2:
+	case broker2.QoS2:
 		pubrec := packet2.NewPublishRec()
 		if len(subClients) == 0 {
 			pubrec.ReasonCode = packets.PubrecNoMatchingSubscribers
