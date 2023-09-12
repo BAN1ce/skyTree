@@ -3,17 +3,15 @@ package app
 import (
 	"context"
 	"fmt"
-	app2 "github.com/BAN1ce/Tree/app"
-	store2 "github.com/BAN1ce/Tree/state/store"
 	"github.com/BAN1ce/skyTree/config"
 	"github.com/BAN1ce/skyTree/inner/api"
 	"github.com/BAN1ce/skyTree/inner/broker"
 	"github.com/BAN1ce/skyTree/inner/broker/session"
 	"github.com/BAN1ce/skyTree/inner/broker/store"
-	"github.com/BAN1ce/skyTree/inner/broker/subtree"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/inner/metric"
 	"github.com/BAN1ce/skyTree/inner/version"
+	broker2 "github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/nutsdb/nutsdb"
 	"log"
 	"sync"
@@ -35,21 +33,21 @@ type App struct {
 func NewApp() *App {
 	// todo: get config
 	metric.Init()
-	var (
-		subTree = app2.NewApp()
-	)
-	if err := subTree.StartTopicCluster(context.TODO(), []app2.Option{
-		app2.WithInitMember(config.GetTree().InitNode),
-		app2.WithJoin(false),
-		app2.WithNodeConfig(config.GetTree().NodeHostConfig),
-		app2.WithConfig(config.GetTree().DragonboatConfig),
-		app2.WithStateMachine(store2.NewState()),
-	}...); err != nil {
-		log.Fatal("start store cluster failed", err)
-	}
+	//var (
+	//	subTree = app2.NewApp()
+	//)
+	//if err := subTree.StartTopicCluster(context.TODO(), []app2.Option{
+	//	app2.WithInitMember(config.GetTree().InitNode),
+	//	app2.WithJoin(false),
+	//	app2.WithNodeConfig(config.GetTree().NodeHostConfig),
+	//	app2.WithConfig(config.GetTree().DragonboatConfig),
+	//	app2.WithStateMachine(store2.NewState()),
+	//}...); err != nil {
+	//	log.Fatal("start store cluster failed", err)
+	//}
 	var (
 		clientManager  = broker.NewClientManager()
-		sessionManager = session.NewSessions(subTree)
+		sessionManager = session.NewSessions(broker2.NewLocalSession())
 		dbStore        = store.NewLocalStore(nutsdb.Options{
 			EntryIdxMode: nutsdb.HintKeyValAndRAMIdxMode,
 			SegmentSize:  nutsdb.MB * 256,
@@ -64,7 +62,7 @@ func NewApp() *App {
 				broker.WithStore(store.NewStoreWrapper(dbStore)),
 				broker.WithSessionManager(sessionManager),
 				broker.WithClientManager(clientManager),
-				broker.WithSubTree(subtree.NewSubTree(subTree)),
+				broker.WithSubCenter(broker2.NewLocalSubCenter()),
 				broker.WithHandlers(&broker.Handlers{
 					Connect:     broker.NewConnectHandler(),
 					Publish:     broker.NewPublishHandler(),

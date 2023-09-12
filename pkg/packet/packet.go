@@ -85,6 +85,10 @@ func NewPublishComp() *packets.Pubcomp {
 	return packets.NewControlPacket(packets.PUBCOMP).Content.(*packets.Pubcomp)
 }
 
+func NewPublishRel() *packets.Pubrel {
+	return packets.NewControlPacket(packets.PUBREL).Content.(*packets.Pubrel)
+}
+
 func WritePacket(writer io.Writer, packet packets.Packet) error {
 	_, err := packet.WriteTo(writer)
 	return err

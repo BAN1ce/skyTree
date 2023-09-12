@@ -1,9 +1,10 @@
-package topic
+package qos1
 
 import (
 	"container/list"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/logger"
+	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/retry"
 	"github.com/eclipse/paho.golang/packets"
@@ -14,11 +15,10 @@ import (
 )
 
 type PublishQueue struct {
-	list           *list.List // publishTask
-	writer         PublishWriter
-	index          atomic.Uint64
-	latestIndex    uint64
-	unAckMessageID []string
+	list        *list.List // publishTask
+	writer      broker.PublishWriter
+	index       atomic.Uint64
+	latestIndex uint64
 }
 
 /**
@@ -34,7 +34,7 @@ type publishTask struct {
 	index     uint64
 }
 
-func NewPublishQueue(writer PublishWriter) *PublishQueue {
+func NewPublishQueue(writer broker.PublishWriter) *PublishQueue {
 	return &PublishQueue{
 		list:   list.New(),
 		writer: writer,
@@ -47,20 +47,12 @@ func (q *PublishQueue) WritePacket(packet *packet.PublishMessage) {
 		retryKey = uuid.NewString()
 	)
 	q.list.PushBack(&publishTask{
-		packet:    packet.Packet,
+		packet:    packet.PublishPacket,
 		retryKey:  retryKey,
 		messageID: packet.MessageID,
 		index:     q.index.Add(1),
 	})
-	q.createRetry(retryKey, packet.Packet)
-}
-
-func (q *PublishQueue) Close() error {
-	for e := q.list.Front(); e != nil; e = e.Next() {
-		q.unAckMessageID = append(q.unAckMessageID, e.Value.(*publishTask).messageID)
-		q.deleteElement(e)
-	}
-	return nil
+	q.createRetry(retryKey, packet.PublishPacket)
 }
 
 // HandlePublishAck handles the publishing ack packet.
@@ -89,9 +81,15 @@ func (q *PublishQueue) HandlePublishAck(publishAck *packets.Puback) bool {
 	return success
 }
 
-// GetUnAckMessageID returns the message id those are not acked.
-func (q *PublishQueue) GetUnAckMessageID() []string {
-	return q.unAckMessageID
+func (q *PublishQueue) getUnFinishedMessageID() []broker.UnFinishedMessage {
+	var unFinishedMessage []broker.UnFinishedMessage
+	for e := q.list.Front(); e != nil; e = e.Next() {
+		unFinishedMessage = append(unFinishedMessage, broker.UnFinishedMessage{
+			MessageID: e.Value.(*publishTask).messageID,
+		})
+		q.deleteElement(e)
+	}
+	return unFinishedMessage
 }
 
 func (q *PublishQueue) deleteElement(e *list.Element) {

@@ -19,30 +19,23 @@ type SessionTopic interface {
 }
 
 type SessionTopicMessage interface {
-	/*
-		about un ack message id
-	*/
-	ReadTopicUnAckMessageID(topic string) (id []string)
-	CreateTopicUnAckMessageID(topic string, messageID []string)
-	DeleteTopicUnAckMessageID(topic string, messageID string)
-	/*
-		about un rec packet id
-	*/
-	ReadTopicUnRecPacketID(topic string) (packetID []string)
-	CreateTopicUnRecPacketID(topic string, packetID []string)
-	DeleteTopicUnRecPacketID(topic string, packetID string)
+	SessionTopicUnFinishedMessage
+	SessionTopicLatestPushedMessage
+}
 
-	/*
-		about un comp packet id
-	*/
-	ReadTopicUnCompPacketID(topic string) (packetID []string)
-	CreateTopicUnCompPacketID(topic string, packetID []string)
-	DeleteTopicUnCompPacketID(topic string, packetID string)
+type UnFinishedMessage struct {
+	MessageID   string
+	PacketID    string
+	PubReceived bool
+}
 
-	/*
-		about last acked message id
-	*/
+type SessionTopicUnFinishedMessage interface {
+	CreateTopicUnFinishedMessage(topic string, message []UnFinishedMessage)
+	ReadTopicUnFinishedMessage(topic string) (message []UnFinishedMessage)
+	DeleteTopicUnFinishedMessage(topic string, messageID string)
+}
 
+type SessionTopicLatestPushedMessage interface {
 	ReadTopicLatestPushedMessageID(topic string) (messageID string, ok bool)
 	SetTopicLatestPushedMessageID(topic string, messageID string)
 	DeleteTopicLatestPushedMessageID(topic string, messageID string)

@@ -5,7 +5,10 @@ import (
 )
 
 type PublishMessage struct {
-	MessageID string
-	Packet    *packets.Publish
-	TimeStamp int64
+	MessageID     string
+	PublishPacket *packets.Publish
+	PubRelPacket  *packets.Pubrel
+	TimeStamp     int64
+	PubReceived   bool
+	FromSession   bool
 }

@@ -177,6 +177,7 @@ func (c *Client) writePacket(packet packets.Packet) {
 		err              error
 		topicName        string
 	)
+	defer pool.ByteBufferPool.Put(buf)
 	// publishAck, subscribeAck, unsubscribeAck should use the same packetID as the original packet
 
 	switch p := packet.(type) {
@@ -186,7 +187,7 @@ func (c *Client) writePacket(packet packets.Packet) {
 		c.identifierIDTopic[p.PacketID] = p.Topic
 		topicName = p.Topic
 	}
-	defer pool.ByteBufferPool.Put(buf)
+
 	if prepareWriteSize, err = packet.WriteTo(buf); err != nil {
 		logger.Logger.Info("write packet error", zap.Error(err), zap.String("client", c.MetaString()))
 		// TODO: check maximum packet size should close client ?

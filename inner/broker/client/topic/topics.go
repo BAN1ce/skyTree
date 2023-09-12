@@ -2,7 +2,10 @@ package topic
 
 import (
 	"context"
-	"fmt"
+	"github.com/BAN1ce/skyTree/inner/broker/client/topic/qos0"
+	"github.com/BAN1ce/skyTree/inner/broker/client/topic/qos1"
+	"github.com/BAN1ce/skyTree/inner/broker/client/topic/qos2"
+	"github.com/BAN1ce/skyTree/inner/broker/client/topic/store"
 	"github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
@@ -15,20 +18,12 @@ type Topic interface {
 	Close() error
 }
 type QoS1Handle interface {
-	HandlePublishAck(puback *packets.Puback)
+	HandlePublishAck(pubAck *packets.Puback)
 }
+
 type QoS2Handle interface {
-	HandlePublishRec(pubrec *packets.Pubrec)
-	HandelPublishComp(pubcomp *packets.Pubcomp)
-}
-
-type PublishWriter interface {
-	// WritePacket writes the packet to the writer.
-	// Warning: packetID is original packetID, method should change it to the new one that does not used.
-	WritePacket(packet packets.Packet)
-
-	GetID() string
-	Close() error
+	HandlePublishRec(pubRec *packets.Pubrec)
+	HandelPublishComp(pubComp *packets.Pubcomp)
 }
 
 type Option func(topics *Topics)
@@ -39,7 +34,7 @@ func WithStore(store broker.ClientMessageStore) Option {
 	}
 }
 
-func WithWriter(writer PublishWriter) Option {
+func WithWriter(writer broker.PublishWriter) Option {
 	return func(topic *Topics) {
 		topic.writer = writer
 	}
@@ -56,7 +51,7 @@ type Topics struct {
 	topic      map[string]Topic
 	session    broker.SessionTopic
 	store      broker.ClientMessageStore
-	writer     PublishWriter
+	writer     broker.PublishWriter
 	windowSize int
 }
 
@@ -126,8 +121,10 @@ func (t *Topics) HandlePublishRec(topic string, pubrec *packets.Pubrec) {
 			t.HandlePublishRec(pubrec)
 			return
 		}
+		logger.Logger.Warn("handle publish Rec failed, handle type error not QoS2")
+		return
 	}
-	logger.Logger.Warn("handle publish Rec failed, maybe topic not exists or handle type error")
+	logger.Logger.Warn("handle publish Rec failed, topic not exists")
 }
 
 func (t *Topics) HandelPublishComp(topic string, pubcomp *packets.Pubcomp) {
@@ -136,22 +133,25 @@ func (t *Topics) HandelPublishComp(topic string, pubcomp *packets.Pubcomp) {
 			t.HandelPublishComp(pubcomp)
 			return
 		}
+		logger.Logger.Warn("handle publish Comp failed, handle type error not QoS2")
+		return
+
 	}
-	logger.Logger.Warn("handle publish Comp failed, maybe topic not exists or handle type error")
+	logger.Logger.Warn("handle publish Comp failed, topic not exists ")
 }
 
 func (t *Topics) createQoS0Topic(topicName string) Topic {
-	return NewQoS0(topicName, t.writer, event.GlobalEvent)
+	return qos0.NewQoS0(topicName, t.writer, event.GlobalEvent)
 }
 
-func (t *Topics) createQoS1Topic(topicName string, writer PublishWriter) Topic {
-	return NewQos1(topicName, writer, NewStoreHelp(t.store, event.GlobalEvent, func(latestMessageID string) {
+func (t *Topics) createQoS1Topic(topicName string, writer broker.PublishWriter) Topic {
+	return qos1.NewQos1(topicName, writer, store.NewStoreHelp(t.store, event.GlobalEvent, func(latestMessageID string) {
 		t.session.SetTopicLatestPushedMessageID(topicName, latestMessageID)
 	}), t.session)
 }
 
-func (t *Topics) createQoS2Topic(topicName string, writer PublishWriter) Topic {
-	return NewQos2(topicName, writer, NewStoreHelp(t.store, event.GlobalEvent), t.session)
+func (t *Topics) createQoS2Topic(topicName string, writer broker.PublishWriter) Topic {
+	return qos2.NewQos2(topicName, writer, store.NewStoreHelp(t.store, event.GlobalEvent), t.session)
 }
 
 func (t *Topics) DeleteTopic(topicName string) {
@@ -160,6 +160,8 @@ func (t *Topics) DeleteTopic(topicName string) {
 			logger.Logger.Warn("topics close store failed", zap.Error(err), zap.String("store", topicName))
 		}
 		delete(t.topic, topicName)
+	} else {
+		logger.Logger.Warn("topics delete topic, topic not exists", zap.String("topic", topicName))
 	}
 }
 
@@ -169,22 +171,10 @@ func (t *Topics) Close() error {
 		return nil
 	}
 	for topicName, topic := range t.topic {
-		t.DeleteTopic(topicName)
-		switch tmp := topic.(type) {
-		case *QoS1:
-			t.session.CreateTopicUnAckMessageID(topicName, tmp.GetUnAckedMessageID())
-		case *QoS2:
-			for _, packet := range tmp.GetUnFinish() {
-				if packet.IsReceived {
-					t.session.CreateTopicUnCompPacketID(topicName, []string{packet.PacketID})
-				} else {
-					t.session.CreateTopicUnRecPacketID(topicName, []string{packet.MessageID})
-				}
-			}
-		case *QoS0:
-		default:
-			logger.Logger.Error("unknown topic type", zap.String("type", fmt.Sprintf("%T", tmp)))
+		if err := topic.Close(); err != nil {
+			logger.Logger.Error("close topic error", zap.Error(err), zap.String("topic", topicName))
 		}
+		t.DeleteTopic(topicName)
 	}
 	return nil
 }

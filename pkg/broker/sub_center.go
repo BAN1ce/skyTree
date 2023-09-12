@@ -1,6 +1,8 @@
 package broker
 
-import "github.com/eclipse/paho.golang/packets"
+import (
+	"github.com/eclipse/paho.golang/packets"
+)
 
 type QoS = byte
 
@@ -19,8 +21,8 @@ type SubClient interface {
 // SubCenter is the interface of the subscription center.
 // It is used to manage the subscription of the clients.
 type SubCenter interface {
-	CreateSub(clientID string, topics map[string]packets.SubOptions)
-	DeleteSub(clientID string, topics []string)
+	CreateSub(clientID string, topics map[string]packets.SubOptions) error
+	DeleteSub(clientID string, topics []string) error
 	Match(topic string) (clientIDQos map[string]int32)
 	DeleteClient(clientID string)
 }

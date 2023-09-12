@@ -110,7 +110,7 @@ func (b *Broker) acceptConn() {
 	}
 }
 
-// ------------------------------------ handle client MQTT Packet ------------------------------------//
+// ------------------------------------ handle client MQTT PublishPacket ------------------------------------//
 
 func (b *Broker) HandlePacket(client *client.Client, packet *packets.ControlPacket) {
 	// TODO : check MQTT version

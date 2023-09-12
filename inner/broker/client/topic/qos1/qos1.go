@@ -1,13 +1,15 @@
-package topic
+package qos1
 
 import (
 	"context"
 	"github.com/BAN1ce/skyTree/config"
+	"github.com/BAN1ce/skyTree/inner/broker/client/topic/store"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/eclipse/paho.golang/packets"
 	"go.uber.org/zap"
+	"time"
 )
 
 type StoreEvent interface {
@@ -21,11 +23,11 @@ type QoS1 struct {
 	meta         *meta
 	publishChan  chan *packet.PublishMessage
 	publishQueue *PublishQueue
-	session      QoS1Session
-	*StoreHelp
+	session      Session
+	*store.Help
 }
 
-func NewQos1(topic string, writer PublishWriter, help *StoreHelp, session QoS1Session) *QoS1 {
+func NewQos1(topic string, writer broker.PublishWriter, help *store.Help, session Session) *QoS1 {
 	latestMessageID, _ := session.ReadTopicLatestPushedMessageID(topic)
 	t := &QoS1{
 		meta: &meta{
@@ -35,7 +37,7 @@ func NewQos1(topic string, writer PublishWriter, help *StoreHelp, session QoS1Se
 			latestMessageID: latestMessageID,
 		},
 		publishQueue: NewPublishQueue(writer),
-		StoreHelp:    help,
+		Help:         help,
 	}
 	return t
 }
@@ -48,9 +50,9 @@ func (q *QoS1) Start(ctx context.Context) {
 	}
 	q.publishChan = make(chan *packet.PublishMessage, q.meta.windowSize)
 	// read client.proto unAck publishChan first
-	q.readSessionUnAck()
-	q.pushMessage()
-	// waiting for exit, prevent pushMessage use goroutine
+	q.readSessionUnFinishMessage()
+	q.listenPublishChan()
+	// waiting for exit, prevent listenPublishChan use goroutine
 	<-ctx.Done()
 	if err := q.Close(); err != nil {
 		logger.Logger.Warn("QoS1: close error = ", zap.Error(err))
@@ -60,26 +62,29 @@ func (q *QoS1) Start(ctx context.Context) {
 	}
 }
 
-func (q *QoS1) readSessionUnAck() {
-	for _, id := range q.session.ReadTopicUnAckMessageID(q.meta.topic) {
-		msg, err := q.ClientMessageStore.ReadTopicMessagesByID(context.TODO(), q.meta.topic, id, 1, true)
+func (q *QoS1) readSessionUnFinishMessage() {
+	for _, msg := range q.session.ReadTopicUnFinishedMessage(q.meta.topic) {
+		ctx, cancel := context.WithTimeout(context.TODO(), 3*time.Second)
+		publishMessage, err := q.ClientMessageStore.ReadTopicMessagesByID(ctx, q.meta.topic, msg.MessageID, 1, true)
+		cancel()
 		if err != nil {
-			logger.Logger.Error("read client.proto unAck publishChan message error", zap.Error(err), zap.String("store", q.meta.topic), zap.String("messageID", id))
+			logger.Logger.Error("read client.proto unAck publishChan message error", zap.Error(err), zap.String("store", q.meta.topic), zap.String("messageID", msg.MessageID))
 			continue
 		}
-		for _, m := range msg {
+		for _, m := range publishMessage {
+			m.FromSession = true
 			q.publishChan <- &m
 		}
 	}
 }
 
-func (q *QoS1) HandlePublishAck(puback *packets.Puback) {
-	if !q.publishQueue.HandlePublishAck(puback) {
-		logger.Logger.Warn("QoS1: handle publish ack failed, packetID not found", zap.Uint16("packetID", puback.PacketID), zap.String("store", q.meta.topic))
+func (q *QoS1) HandlePublishAck(pubAck *packets.Puback) {
+	if !q.publishQueue.HandlePublishAck(pubAck) {
+		logger.Logger.Warn("QoS1: handle publish ack failed, packetID not found", zap.Uint16("packetID", pubAck.PacketID), zap.String("store", q.meta.topic))
 	}
 }
 
-func (q *QoS1) pushMessage() {
+func (q *QoS1) listenPublishChan() {
 	for {
 		select {
 		case <-q.ctx.Done():
@@ -88,11 +93,14 @@ func (q *QoS1) pushMessage() {
 			if !ok {
 				return
 			}
-			msg.Packet.QoS = broker.QoS1
-			q.meta.writer.WritePacket(msg.Packet)
+			msg.PublishPacket.QoS = broker.QoS1
+			q.meta.writer.WritePacket(msg.PublishPacket)
 			q.publishQueue.WritePacket(msg)
+			if !msg.FromSession {
+				q.meta.latestMessageID = msg.MessageID
+			}
 		default:
-			if err := q.StoreHelp.readStore(q.ctx, q.meta.topic, q.meta.latestMessageID, q.meta.windowSize, false, q.writeToPublishChan); err != nil {
+			if err := q.Help.ReadStore(q.ctx, q.meta.topic, q.meta.latestMessageID, q.meta.windowSize, false, q.writeToPublishChan); err != nil {
 				logger.Logger.Error("QoS2: read store error = ", zap.Error(err), zap.String("store", q.meta.topic))
 			}
 		}
@@ -100,11 +108,14 @@ func (q *QoS1) pushMessage() {
 }
 
 func (q *QoS1) writeToPublishChan(message *packet.PublishMessage) {
+	if q.ctx.Err() != nil {
+		return
+	}
 	select {
 	case q.publishChan <- message:
-		q.meta.latestMessageID = message.MessageID
-	default:
-
+	case <-q.ctx.Done():
+		close(q.publishChan)
+		return
 	}
 }
 
@@ -119,14 +130,7 @@ func (q *QoS1) Close() error {
 // afterClose save unAck messageID to client.proto when exit
 // should be call after close and only call once
 func (q *QoS1) afterClose() error {
-	if err := q.publishQueue.Close(); err != nil {
-		return err
-	}
-	q.session.CreateTopicUnAckMessageID(q.meta.topic, q.publishQueue.GetUnAckMessageID())
+	q.session.CreateTopicUnFinishedMessage(q.meta.topic, q.publishQueue.getUnFinishedMessageID())
 	q.session.SetTopicLatestPushedMessageID(q.meta.topic, q.meta.latestMessageID)
 	return nil
-}
-
-func (q *QoS1) GetUnAckedMessageID() []string {
-	return q.publishQueue.GetUnAckMessageID()
 }

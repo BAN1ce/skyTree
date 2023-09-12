@@ -1,10 +1,11 @@
-package topic
+package qos2
 
 import (
 	"container/list"
 	"fmt"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/logger"
+	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/retry"
 	"github.com/eclipse/paho.golang/packets"
@@ -14,9 +15,9 @@ import (
 	"time"
 )
 
-type QoS2Queue struct {
+type Queue struct {
 	list   *list.List // QoS2Task
-	writer PublishWriter
+	writer broker.PublishWriter
 }
 
 type QoS2Task struct {
@@ -27,53 +28,38 @@ type QoS2Task struct {
 	messageID string
 }
 
-func NewQoS2Queue(writer PublishWriter) *QoS2Queue {
-	return &QoS2Queue{
+func NewQoS2Queue(writer broker.PublishWriter) *Queue {
+	return &Queue{
 		list:   list.New(),
 		writer: writer,
 	}
 }
 
-func (q *QoS2Queue) WritePacket(message *packet.PublishMessage) {
+func (q *Queue) WritePacket(message *packet.PublishMessage) {
 	var (
 		retryKey = uuid.NewString()
 		task     = &QoS2Task{
-			packet:    message.Packet,
-			packetID:  message.Packet.PacketID,
+			packet:    message.PublishPacket,
+			packetID:  message.PublishPacket.PacketID,
 			retryKey:  retryKey,
 			messageID: message.MessageID,
 		}
 	)
+	if message.PubReceived {
+		task.received.Store(true)
+	}
 	q.list.PushBack(task)
 	q.createRetry(retryKey, task)
 }
 
-func (q *QoS2Queue) WritePublishRel(packetID uint16) {
-	var (
-		retryKey = uuid.NewString()
-		task     = &QoS2Task{
-			packetID: packetID,
-			retryKey: retryKey,
-			received: atomic.Bool{},
-		}
-		publishRel = packets.NewControlPacket(packets.PUBREL).Content.(*packets.Pubrel)
-	)
-	q.list.PushBack(task)
-	task.received.Store(true)
-	publishRel.PacketID = packetID
-	q.writer.WritePacket(publishRel)
-	q.createRetry(retryKey, task)
-
-}
-
-func (q *QoS2Queue) Close() error {
+func (q *Queue) Close() error {
 	for e := q.list.Front(); e != nil; e = e.Next() {
 		q.deleteElement(e)
 	}
 	return nil
 }
 
-func (q *QoS2Queue) HandlePublishRec(pubrec *packets.Pubrec) bool {
+func (q *Queue) HandlePublishRec(pubrec *packets.Pubrec) bool {
 	var success bool
 	for e := q.list.Front(); e != nil; e = e.Next() {
 		task := e.Value.(*QoS2Task)
@@ -89,7 +75,7 @@ func (q *QoS2Queue) HandlePublishRec(pubrec *packets.Pubrec) bool {
 	return success
 }
 
-func (q *QoS2Queue) HandlePublishComp(pubcomp *packets.Pubcomp) {
+func (q *Queue) HandlePublishComp(pubcomp *packets.Pubcomp) {
 	for e := q.list.Front(); e != nil; e = e.Next() {
 		task := e.Value.(*QoS2Task)
 		if !task.received.Load() {
@@ -104,12 +90,12 @@ func (q *QoS2Queue) HandlePublishComp(pubcomp *packets.Pubcomp) {
 	}
 }
 
-func (q *QoS2Queue) deleteElement(e *list.Element) {
+func (q *Queue) deleteElement(e *list.Element) {
 	facade.GetPublishRetry().Delete(e.Value.(*QoS2Task).retryKey)
 	q.list.Remove(e)
 }
 
-func (q *QoS2Queue) createRetry(retryKey string, packet *QoS2Task) {
+func (q *Queue) createRetry(retryKey string, packet *QoS2Task) {
 	err := facade.GetPublishRetry().Create(&retry.Task{
 		MaxTimes:     3,
 		MaxTime:      60 * time.Second,
@@ -139,43 +125,15 @@ func (q *QoS2Queue) createRetry(retryKey string, packet *QoS2Task) {
 	}
 }
 
-type UnFinishPacket struct {
-	MessageID  string
-	PacketID   string
-	IsReceived bool
-}
-
-func (q *QoS2Queue) getUnFinishPacket() []*UnFinishPacket {
-	var unFinishPackets []*UnFinishPacket
+func (q *Queue) getUnFinishPacket() []broker.UnFinishedMessage {
+	var unFinishMessage []broker.UnFinishedMessage
 	for e := q.list.Front(); e != nil; e = e.Next() {
 		task := e.Value.(*QoS2Task)
-		unFinishPackets = append(unFinishPackets, &UnFinishPacket{
-			MessageID:  task.messageID,
-			PacketID:   fmt.Sprintf("%d", task.packetID),
-			IsReceived: task.received.Load(),
+		unFinishMessage = append(unFinishMessage, broker.UnFinishedMessage{
+			MessageID:   task.messageID,
+			PacketID:    fmt.Sprintf("%d", task.packetID),
+			PubReceived: task.received.Load(),
 		})
 	}
-	return unFinishPackets
-}
-
-func (q *QoS2Queue) getUnRecMessageID() []string {
-	var messageIDs []string
-	for e := q.list.Front(); e != nil; e = e.Next() {
-		task := e.Value.(*QoS2Task)
-		if !task.received.Load() {
-			messageIDs = append(messageIDs, task.messageID)
-		}
-	}
-	return messageIDs
-}
-
-func (q *QoS2Queue) getUnCompPacketID() []string {
-	var packetIDs []string
-	for e := q.list.Front(); e != nil; e = e.Next() {
-		task := e.Value.(*QoS2Task)
-		if task.received.Load() {
-			packetIDs = append(packetIDs, fmt.Sprintf("%d", task.packetID))
-		}
-	}
-	return packetIDs
+	return unFinishMessage
 }

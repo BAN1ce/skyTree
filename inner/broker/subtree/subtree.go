@@ -19,7 +19,7 @@ func NewSubTree(app2 *app.App) *SubTree {
 	return &SubTree{app: app2}
 }
 
-func (s *SubTree) CreateSub(clientID string, topics map[string]packets.SubOptions) {
+func (s *SubTree) CreateSub(clientID string, topics map[string]packets.SubOptions) error {
 	var (
 		ctx, cancel = context.WithTimeout(context.TODO(), 5*time.Second)
 		req         = proto.SubRequest{
@@ -36,15 +36,17 @@ func (s *SubTree) CreateSub(clientID string, topics map[string]packets.SubOption
 	defer cancel()
 	if _, err := s.app.Subscribe(ctx, &req); err != nil {
 		logger.Logger.Error("subscribe failed", zap.String("clientID", clientID), zap.Error(err))
+		return err
 	}
 	// TODO
 }
 
-func (s *SubTree) DeleteSub(clientID string, topics []string) {
+func (s *SubTree) DeleteSub(clientID string, topics []string) error {
 	s.app.UnSubscribe(context.TODO(), &proto.UnSubRequest{
 		ClientID: clientID,
 		Topics:   topics,
 	})
+	return nil
 }
 
 func (s *SubTree) Match(topic string) (clientIDQos map[string]int32) {

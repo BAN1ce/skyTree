@@ -21,7 +21,7 @@ func WithClientManager(manager *ClientManager) Option {
 	}
 }
 
-func WithSubTree(tree broker.SubCenter) Option {
+func WithSubCenter(tree broker.SubCenter) Option {
 	return func(core *Broker) {
 		core.subTree = tree
 	}

@@ -114,8 +114,8 @@ func nutsDBValuesBeMessages(values []*zset.SortedSetNode, topic string) []packet
 			continue
 		} else {
 			messages = append(messages, packet.PublishMessage{
-				MessageID: v.Key(),
-				Packet:    pubPacket,
+				MessageID:     v.Key(),
+				PublishPacket: pubPacket,
 			})
 		}
 	}

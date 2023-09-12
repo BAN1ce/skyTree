@@ -1,4 +1,4 @@
-package topic
+package qos0
 
 import (
 	"context"
@@ -9,24 +9,16 @@ import (
 	"go.uber.org/zap"
 )
 
-// PublishListener is the interface of the publish event listener.
-// It is used to listen the publish event from broker.
-// The publish event will be triggered when the client publish a message to the broker.
-type PublishListener interface {
-	CreatePublishEvent(topic string, handler func(i ...interface{}))
-	DeletePublishEvent(topic string, handler func(i ...interface{}))
-}
-
 // QoS0 is Topic with QoS0
 type QoS0 struct {
 	ctx             context.Context
 	cancel          context.CancelFunc
 	topic           string
-	writer          PublishWriter
-	publishListener PublishListener
+	writer          broker.PublishWriter
+	publishListener broker.PublishListener
 }
 
-func NewQoS0(topic string, writer PublishWriter, listener PublishListener) *QoS0 {
+func NewQoS0(topic string, writer broker.PublishWriter, listener broker.PublishListener) *QoS0 {
 	return &QoS0{
 		topic:           topic,
 		writer:          writer,

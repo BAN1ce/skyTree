@@ -1,4 +1,4 @@
-package topic
+package store
 
 import (
 	"context"
@@ -10,24 +10,24 @@ import (
 
 type HandleStoreReadDone func(latestMessageID string)
 
-// StoreHelp is the help of the store.
+// Help is the help of the store.
 // Read message from the store and write to the channel.
 // It will listen the store event when store is empty, and read the message from the store when the event is triggered.
-type StoreHelp struct {
-	StoreEvent
+type Help struct {
+	Event
 	broker.ClientMessageStore
 	handleStoreReadDone []HandleStoreReadDone
 }
 
-func NewStoreHelp(store broker.ClientMessageStore, event StoreEvent, done ...HandleStoreReadDone) *StoreHelp {
-	return &StoreHelp{
-		StoreEvent:          event,
+func NewStoreHelp(store broker.ClientMessageStore, event Event, done ...HandleStoreReadDone) *Help {
+	return &Help{
+		Event:               event,
 		ClientMessageStore:  store,
 		handleStoreReadDone: done,
 	}
 }
 
-func (s *StoreHelp) readStore(ctx context.Context, topic, startMessageID string, size int, include bool, writer func(message *packet.PublishMessage)) (err error) {
+func (s *Help) ReadStore(ctx context.Context, topic, startMessageID string, size int, include bool, writer func(message *packet.PublishMessage)) (err error) {
 	// FIXME: If consecutive errors, consider downgrading options
 	var (
 		total int
@@ -63,7 +63,7 @@ func (s *StoreHelp) readStore(ctx context.Context, topic, startMessageID string,
 	return
 }
 
-func (s *StoreHelp) readStoreWriteChan(ctx context.Context, topic string, id string, size int, include bool, writer func(message *packet.PublishMessage)) error {
+func (s *Help) readStoreWriteChan(ctx context.Context, topic string, id string, size int, include bool, writer func(message *packet.PublishMessage)) error {
 	logger.Logger.Debug("readStoreWriteChan", zap.String("store", topic), zap.String("id", id), zap.Int("size", size), zap.Bool("include", include))
 	var (
 		message, err = s.ReadTopicMessagesByID(ctx, topic, id, size, include)

@@ -1,6 +1,7 @@
 package session
 
 import (
+	"encoding/json"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
 	"go.uber.org/zap"
@@ -12,6 +13,7 @@ import (
 const (
 	KeyClientPrefix               = "client/"
 	KeyClientUnAckMessageID       = `/unack/message_id`
+	keyClientUnfinishedMessage    = `/unfinished/message`
 	KeyClientUnRecPacketID        = `/unrec/packet_id`
 	KeyClientUnCompPacketID       = `/uncomp/packet_id`
 	KeyClientLatestAliveTime      = `/latest_alive_time`
@@ -97,99 +99,6 @@ func (s *Session) DeleteSubTopic(topic string) {
 	}
 }
 
-func (s *Session) ReadTopicUnAckMessageID(topic string) (id []string) {
-	if topic == "" {
-		return
-	}
-	m, err := s.store.DefaultReadPrefixKey(clientTopicUnAckKeyPrefix(s.clientID, topic))
-	if err != nil {
-		logger.Logger.Error("read topic unack message id failed", zap.Error(err), zap.String("clientID", s.clientID))
-		return nil
-	}
-	for _, v := range m {
-		id = append(id, v)
-	}
-	return
-}
-
-func (s *Session) CreateTopicUnAckMessageID(topic string, messageID []string) {
-	if topic == "" {
-		return
-	}
-	for _, id := range messageID {
-		if err := s.store.DefaultPutKey(clientTopicUnAckKey(s.clientID, topic, id), id); err != nil {
-			logger.Logger.Error("create topic unack message id failed", zap.Error(err), zap.String("clientID", s.clientID),
-				zap.String("topic", topic), zap.String("messageID", id))
-		}
-	}
-}
-
-func (s *Session) DeleteTopicUnAckMessageID(topic string, messageID string) {
-	if topic == "" {
-		return
-	}
-	if err := s.store.DefaultDeleteKey(clientTopicUnAckKey(s.clientID, topic, messageID)); err != nil {
-		logger.Logger.Error("delete topic unack message id failed", zap.Error(err), zap.String("clientID", s.clientID),
-			zap.String("topic", topic), zap.String("messageID", messageID))
-	}
-}
-
-func (s *Session) ReadTopicUnRecPacketID(topic string) (packetID []string) {
-	id, err := s.store.DefaultReadPrefixKey(withClientKey(KeyClientUnRecPacketID, s.clientID))
-	if err != nil {
-		logger.Logger.Error("read topic unrec packet id failed", zap.Error(err), zap.String("clientID", s.clientID))
-		return nil
-	}
-	for _, v := range id {
-		packetID = append(packetID, v)
-	}
-	return
-}
-
-func (s *Session) CreateTopicUnRecPacketID(topic string, packetID []string) {
-	for _, id := range packetID {
-		if err := s.store.DefaultPutKey(withClientKey(KeyClientUnRecPacketID, s.clientID)+"/"+id, ""); err != nil {
-			logger.Logger.Error("create topic unrec packet id failed", zap.Error(err), zap.String("clientID", s.clientID),
-				zap.String("topic", topic), zap.String("packetID", id))
-		}
-	}
-}
-
-func (s *Session) DeleteTopicUnRecPacketID(topic string, packetID string) {
-	if err := s.store.DefaultDeleteKey(withClientKey(KeyClientUnRecPacketID, s.clientID) + "/" + packetID); err != nil {
-		logger.Logger.Error("delete topic unrec packet id failed", zap.Error(err), zap.String("clientID", s.clientID),
-			zap.String("topic", topic), zap.String("packetID", packetID))
-	}
-}
-
-func (s *Session) ReadTopicUnCompPacketID(topic string) (packetID []string) {
-	id, err := s.store.DefaultReadPrefixKey(withClientKey(KeyClientUnCompPacketID, s.clientID))
-	if err != nil {
-		logger.Logger.Error("read topic uncomp packet id failed", zap.Error(err), zap.String("clientID", s.clientID))
-		return nil
-	}
-	for _, v := range id {
-		packetID = append(packetID, v)
-	}
-	return
-}
-
-func (s *Session) CreateTopicUnCompPacketID(topic string, packetID []string) {
-	for _, id := range packetID {
-		if err := s.store.DefaultPutKey(withClientKey(KeyClientUnCompPacketID, s.clientID)+"/"+id, ""); err != nil {
-			logger.Logger.Error("create topic uncomp packet id failed", zap.Error(err), zap.String("clientID", s.clientID),
-				zap.String("topic", topic), zap.String("packetID", id))
-		}
-	}
-}
-
-func (s *Session) DeleteTopicUnCompPacketID(topic string, packetID string) {
-	if err := s.store.DefaultDeleteKey(withClientKey(KeyClientUnCompPacketID, s.clientID) + "/" + packetID); err != nil {
-		logger.Logger.Error("delete topic uncomp packet id failed", zap.Error(err), zap.String("clientID", s.clientID),
-			zap.String("topic", topic), zap.String("packetID", packetID))
-	}
-}
-
 func (s *Session) ReadTopicLatestPushedMessageID(topic string) (messageID string, ok bool) {
 	id, _, err := s.store.DefaultReadKey(withClientKey(KeyClientLatestAckedMessageID, s.clientID))
 	if err != nil {
@@ -210,5 +119,45 @@ func (s *Session) DeleteTopicLatestPushedMessageID(topic string, messageID strin
 	if err := s.store.DefaultDeleteKey(withClientKey(KeyClientLatestAckedMessageID, s.clientID)); err != nil {
 		logger.Logger.Error("delete topic last acked message id failed", zap.Error(err), zap.String("clientID", s.clientID),
 			zap.String("topic", topic), zap.String("messageID", messageID))
+	}
+}
+
+func (s *Session) CreateTopicUnFinishedMessage(topic string, message []broker.UnFinishedMessage) {
+	prefix := clientTopicUnFinishedMessagePrefix(s.clientID, topic)
+	for _, m := range message {
+		payload, err := json.Marshal(m)
+		if err != nil {
+			logger.Logger.Error("marshal unfinished message failed", zap.Error(err), zap.String("clientID", s.clientID))
+			continue
+		}
+		if err := s.store.DefaultPutKey(prefix+"/"+m.MessageID, string(payload)); err != nil {
+			logger.Logger.Error("create topic unfinished message failed", zap.Error(err), zap.String("clientID", s.clientID),
+				zap.String("topic", topic), zap.String("messageID", m.MessageID))
+		}
+	}
+}
+
+func (s *Session) ReadTopicUnFinishedMessage(topic string) (message []broker.UnFinishedMessage) {
+	prefix := clientTopicUnFinishedMessagePrefix(s.clientID, topic)
+
+	m, err := s.store.DefaultReadPrefixKey(prefix)
+	if err != nil {
+		logger.Logger.Error("read topic unfinished message failed", zap.Error(err), zap.String("clientID", s.clientID))
+		return
+	}
+	for _, v := range m {
+		var unfinishedMessage broker.UnFinishedMessage
+		if err := json.Unmarshal([]byte(v), &unfinishedMessage); err != nil {
+			logger.Logger.Error("unmarshal unfinished message failed", zap.Error(err), zap.String("clientID", s.clientID))
+			continue
+		}
+		message = append(message, unfinishedMessage)
+	}
+	return message
+}
+
+func (s *Session) DeleteTopicUnFinishedMessage(topic string, messageID string) {
+	if err := s.store.DefaultDeleteKey(clientTopicUnFinishedMessagePrefix(s.clientID, topic)); err != nil {
+		logger.Logger.Error("delete topic unfinished message failed", zap.Error(err), zap.String("clientID", s.clientID))
 	}
 }

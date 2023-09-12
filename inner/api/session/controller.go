@@ -37,10 +37,9 @@ func (c *Controller) Info(ctx echo.Context) error {
 	for topic, qos := range session.ReadSubTopics() {
 		lastMessageID, _ := session.ReadTopicLatestPushedMessageID(topic)
 		data.SubTopic = append(data.SubTopic, subTopic{
-			Topic:          topic,
-			Qos:            int(qos),
-			LastMessageID:  lastMessageID,
-			UnAckMessageID: session.ReadTopicUnAckMessageID(topic),
+			Topic:         topic,
+			Qos:           int(qos),
+			LastMessageID: lastMessageID,
 		})
 	}
 	data.ClientID = req.ClientID
