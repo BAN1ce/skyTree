@@ -4,9 +4,11 @@ import (
 	event2 "github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
+	packet2 "github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/eclipse/paho.golang/packets"
 	"go.uber.org/zap"
+	"time"
 )
 
 // Wrapper is a wrapper of pkg.Store
@@ -26,11 +28,15 @@ func (s *Wrapper) StorePublishPacket(packet *packets.Publish) (messageID string,
 		topic       = packet.Topic
 	)
 	defer pool.ByteBufferPool.Put(encodedData)
-	_, err = packet.WriteTo(encodedData)
-	if err != nil {
-		logger.Logger.Error("encode packet error = ", zap.Error(err), zap.String("store", topic))
-		return
+
+	// publish packet encode to bytes
+	if err := broker.Encode(broker.SerialVersion1, &packet2.PublishMessage{
+		PublishPacket: packet,
+		TimeStamp:     time.Now().Unix(),
+	}, encodedData); err != nil {
+		return "", err
 	}
+	// store message bytes
 	messageID, err = s.CreatePacket(topic, encodedData.Bytes())
 	if err != nil {
 		logger.Logger.Error("create packet to store error = ", zap.Error(err), zap.String("store", topic))

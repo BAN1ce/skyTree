@@ -28,3 +28,10 @@ var (
 var (
 	ErrInvalidQoS = errors.New("invalid qos")
 )
+
+var (
+	ErrStoreMessageLength  = errors.New("store message length error")
+	ErrStoreMessageExpired = errors.New("store message expired")
+	ErrStoreVersionInvalid = errors.New("store version invalid")
+	ErrStoreReadCreateTime = errors.New("read create time failed")
+)

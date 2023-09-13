@@ -64,7 +64,6 @@ func (s *Help) ReadStore(ctx context.Context, topic, startMessageID string, size
 }
 
 func (s *Help) readStoreWriteChan(ctx context.Context, topic string, id string, size int, include bool, writer func(message *packet.PublishMessage)) error {
-	logger.Logger.Debug("readStoreWriteChan", zap.String("store", topic), zap.String("id", id), zap.Int("size", size), zap.Bool("include", include))
 	var (
 		message, err = s.ReadTopicMessagesByID(ctx, topic, id, size, include)
 		messageID    string
@@ -72,6 +71,12 @@ func (s *Help) readStoreWriteChan(ctx context.Context, topic string, id string, 
 	if err != nil {
 		return err
 	}
+	logger.Logger.Debug("store help read publish message and write to channel",
+		zap.String("store", topic),
+		zap.String("id", id),
+		zap.Int("size", size),
+		zap.Bool("include", include),
+		zap.Int("got message size", len(message)))
 	for _, m := range message {
 		writer(&m)
 	}

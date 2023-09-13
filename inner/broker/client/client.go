@@ -47,6 +47,7 @@ type Client struct {
 	identifierIDTopic map[uint16]string
 	QoS2              *HandleQoS2
 	topicAlias        map[uint16]string
+	subIdentifier     map[string]int
 }
 
 func NewClient(conn net.Conn, option ...Option) *Client {
@@ -88,12 +89,22 @@ func (c *Client) Run(ctx context.Context, handler Handler) {
 }
 
 func (c *Client) HandleSub(subscribe *packets.Subscribe) map[string]byte {
+	c.mux.Lock()
+	defer c.mux.Unlock()
 	var (
-		topics = subscribe.Subscriptions
-		failed = map[string]byte{}
+		topics        = subscribe.Subscriptions
+		failed        = map[string]byte{}
+		subIdentifier int
 	)
+	// store topic's subIdentifier
+	if tmp := subscribe.Properties.SubscriptionIdentifier; tmp != nil {
+		subIdentifier = *tmp
+		for t := range topics {
+			c.subIdentifier[t] = subIdentifier
+		}
+	}
+	// create topic instance
 	for t, v := range topics {
-		// FIXME qos 和其它配置
 		c.topics.CreateTopic(t, v.QoS)
 		failed[t] = v.QoS
 	}
@@ -182,10 +193,16 @@ func (c *Client) writePacket(packet packets.Packet) {
 
 	switch p := packet.(type) {
 	case *packets.Publish:
-		p.PacketID = c.packetIDFactory.Generate()
-		logger.Logger.Debug("publish to client", zap.Uint16("packetID", p.PacketID), zap.String("client", c.MetaString()), zap.String("store", p.Topic))
-		c.identifierIDTopic[p.PacketID] = p.Topic
 		topicName = p.Topic
+		// generate new packetID and store
+		p.PacketID = c.packetIDFactory.Generate()
+		c.identifierIDTopic[p.PacketID] = p.Topic
+		logger.Logger.Debug("publish to client", zap.Uint16("packetID", p.PacketID), zap.String("client", c.MetaString()), zap.String("store", p.Topic))
+
+		// append subscriptionIdentifier
+		if subIdentifier, ok := c.subIdentifier[p.Topic]; ok {
+			p.Properties.SubscriptionIdentifier = &subIdentifier
+		}
 	}
 
 	if prepareWriteSize, err = packet.WriteTo(buf); err != nil {

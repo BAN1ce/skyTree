@@ -41,20 +41,31 @@ func (p *PublishHandler) handleTopicAlias(packet *packets.Publish, client *clien
 
 func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket *packets.ControlPacket) {
 	var (
-		packet     = rawPacket.Content.(*packets.Publish)
-		topic      = packet.Topic
-		qos        = packet.QoS
-		pubAck     = packet2.NewPublishAck()
-		subClients = broker.subTree.Match(topic)
-		err        error
+		packet = rawPacket.Content.(*packets.Publish)
+		qos    = packet.QoS
+		pubAck = packet2.NewPublishAck()
+		err    error
 	)
 	pubAck.PacketID = packet.PacketID
+	// handle topic alias, if topic alias is not 0, then use topic alias
+	// if topic alias is 0, then use topic
 	if err = p.handleTopicAlias(packet, client); err != nil {
 		logger.Logger.Error("handle topic alias error", zap.Error(err))
 		pubAck.ReasonCode = packets.PubackUnspecifiedError
 		broker.writePacket(client, pubAck)
 		return
 	}
+	var (
+		topic      = packet.Topic
+		subClients = broker.subTree.Match(topic)
+	)
+	// double check topic name
+	if topic == "" {
+		pubAck.ReasonCode = packets.PubackTopicNameInvalid
+		broker.writePacket(client, pubAck)
+		return
+	}
+
 	// TODO: should emit all wildcard store
 	event.Event.Emit(event.ClientPublish, topic)
 	event.Event.Emit(event.ReceivedTopicPublishEventName(topic), topic, packet)
@@ -62,6 +73,7 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 	switch qos {
 	case broker2.QoS0:
 		return
+
 	case broker2.QoS1:
 		if len(subClients) == 0 {
 			pubAck.ReasonCode = packets.PubackNoMatchingSubscribers
@@ -70,11 +82,13 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 		}
 		// store message
 		if _, err = broker.store.StorePublishPacket(packet); err != nil {
+			logger.Logger.Error("store publish packet error", zap.Error(err), zap.String("store", topic))
 			pubAck.ReasonCode = packets.PubackUnspecifiedError
 		} else {
 			pubAck.ReasonCode = packets.PubackSuccess
 		}
 		client.WritePacket(pubAck)
+
 	case broker2.QoS2:
 		pubrec := packet2.NewPublishRec()
 		if len(subClients) == 0 {
@@ -90,8 +104,10 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 		logger.Logger.Info("client qos2 handle publish again", zap.String("client", client.MetaString()), zap.String("store", topic),
 			zap.Uint16("packetID", packet.PacketID))
 		return
+
 	default:
 		pubAck.ReasonCode = packets.PubackUnspecifiedError
+		client.WritePacket(pubAck)
+		return
 	}
-
 }

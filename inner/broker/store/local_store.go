@@ -109,14 +109,15 @@ func nutsDBValuesBeMessages(values []*zset.SortedSetNode, topic string) []packet
 		messages []packet.PublishMessage
 	)
 	for _, v := range values {
-		if pubPacket, err := broker.Decode(v.Value); err != nil {
+		if pubMessage, err := broker.Decode(v.Value); err != nil {
 			logger.Logger.Error("read from Local decode error: ", zap.Error(err))
 			continue
 		} else {
-			messages = append(messages, packet.PublishMessage{
-				MessageID:     v.Key(),
-				PublishPacket: pubPacket,
-			})
+			if pubMessage.ExpiredTime == 0 || pubMessage.ExpiredTime > time.Now().Unix() {
+				messages = append(messages, *pubMessage)
+			} else {
+				logger.Logger.Debug("read from Local decode message expired", zap.String("topic", topic), zap.String("messageID", pubMessage.MessageID))
+			}
 		}
 	}
 	return messages

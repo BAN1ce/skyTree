@@ -88,13 +88,13 @@ func (t *Topics) CreateTopic(topicName string, qos broker.QoS) {
 	}
 	switch qos {
 	case broker.QoS0:
-		logger.Logger.Debug("create store with QoS0", zap.String("store", topicName))
+		logger.Logger.Debug("create store with QoS0", zap.String("topic", topicName))
 		topic = t.createQoS0Topic(topicName)
 	case broker.QoS1:
-		logger.Logger.Debug("create store with QoS1", zap.String("store", topicName))
+		logger.Logger.Debug("create store with QoS1", zap.String("topic", topicName))
 		topic = t.createQoS1Topic(topicName, t.writer)
 	case broker.QoS2:
-		logger.Logger.Debug("create store with QoS2", zap.String("store", topicName))
+		logger.Logger.Debug("create store with QoS2", zap.String("topic", topicName))
 		topic = t.createQoS2Topic(topicName, t.writer)
 	default:
 		logger.Logger.Warn("create store with wrong QoS ", zap.Uint8("qos", uint8(qos)))

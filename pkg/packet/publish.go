@@ -8,7 +8,8 @@ type PublishMessage struct {
 	MessageID     string
 	PublishPacket *packets.Publish
 	PubRelPacket  *packets.Pubrel
-	TimeStamp     int64
 	PubReceived   bool
 	FromSession   bool
+	TimeStamp     int64
+	ExpiredTime   int64
 }

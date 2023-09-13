@@ -37,6 +37,7 @@ func NewQos1(topic string, writer broker.PublishWriter, help *store.Help, sessio
 			latestMessageID: latestMessageID,
 		},
 		publishQueue: NewPublishQueue(writer),
+		session:      session,
 		Help:         help,
 	}
 	return t
