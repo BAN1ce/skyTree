@@ -10,6 +10,7 @@ import (
 	"github.com/eclipse/paho.golang/packets"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
+	"time"
 )
 
 type ConnectHandler struct {
@@ -23,9 +24,9 @@ func (c *ConnectHandler) Handle(broker *Broker, client *client2.Client, packet *
 	if client.IsState(state.ConnectReceived) {
 		// client already received connect packet
 		client.Close()
-	} else {
-		client.SetState(state.ConnectReceived)
+		return
 	}
+	client.SetState(state.ConnectReceived)
 	var (
 		err              error
 		connectPacket, _ = packet.Content.(*packets.Connect)
@@ -49,30 +50,15 @@ func (c *ConnectHandler) Handle(broker *Broker, client *client2.Client, packet *
 	// TODO: handle will message
 	if connectPacket.WillFlag {
 		// client.proto.Set(pkg.WillFlag, pkg.WillFlagTrue)
-		switch connectPacket.WillQOS {
-		case 0x00:
-			// client.proto.Set(pkg.WillQos, pkg.WillQos0)
-		case 0x01:
-			// client.proto.Set(pkg.WillQos, pkg.WillQos1)
-		case 0x02:
-			// client.proto.Set(pkg.WillQos, pkg.WillQos2)
-		default:
-			conAck.ReasonCode = packets.ConnackProtocolError
+		if err := client.SetWill(broker2.ConnectPacketToWillMessage(connectPacket)); err != nil {
+			conAck.ReasonCode = packets.ConnackServerUnavailable
+			logger.Logger.Warn("set will message error: ", zap.Error(err), zap.String("client", client.MetaString()))
 			broker.writePacket(client, conAck)
 			client.Close()
 			return
 		}
-		if connectPacket.WillRetain {
-			// client.proto.Set(pkg.WillRetain, pkg.WillRetainTrue)
-		} else {
-			// client.proto.Set(pkg.WillRetain, pkg.WillRetainFalse)
-		}
-		// TODO: handle will message to store client.proto
-	} else {
-		// client.proto.Set(pkg.WillFlag, pkg.WillFlagFalse)
 	}
 
-	// TODO: connect ack properties implementation
 	broker.CreateClient(client)
 	broker.writePacket(client, conAck)
 }
@@ -83,7 +69,9 @@ func (c *ConnectHandler) handleConnectProperties(_ *Broker, client *client2.Clie
 		conack.ReasonCode = packets.ConnackProtocolError
 		return err
 	}
-	client.SetConnectProperties(connectProperties)
+	client.SetConnectProperties(&broker2.SessionConnectProperties{
+		ExpiryInterval: connectProperties.SessionExpiryInterval,
+	})
 	return nil
 }
 
@@ -105,7 +93,7 @@ func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client
 		clientID = uuid.New().String()
 	}
 	if cleanStart {
-		// clean client.proto
+		// TODO: if clean need delete will message and delay job
 		broker.sessionManager.DeleteSession(clientID)
 		session = broker.sessionManager.NewSession(clientID)
 		broker.sessionManager.CreateSession(clientID, session)
@@ -120,7 +108,7 @@ func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client
 			connack.SessionPresent = true
 		}
 	}
-	if err = client.SetSession(session); err != nil {
+	if err = client.SetMeta(session, time.Second*time.Duration(packet.KeepAlive)); err != nil {
 		connack.ReasonCode = packets.ConnackServerUnavailable
 		return errs.ErrSetClientSession
 	}

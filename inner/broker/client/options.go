@@ -10,13 +10,13 @@ type NotifyClientClose interface {
 type Option func(*Options)
 
 type Options struct {
-	Store       broker.ClientMessageStore
+	Store       broker.TopicMessageStore
 	session     broker.Session
 	cfg         Config
 	notifyClose NotifyClientClose
 }
 
-func WithStore(store broker.ClientMessageStore) Option {
+func WithStore(store broker.TopicMessageStore) Option {
 	return func(options *Options) {
 		options.Store = store
 	}

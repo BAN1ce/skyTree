@@ -7,3 +7,8 @@ type PublishListener interface {
 	CreatePublishEvent(topic string, handler func(i ...interface{}))
 	DeletePublishEvent(topic string, handler func(i ...interface{}))
 }
+
+type MessageStoreEvent interface {
+	CreateListenMessageStoreEvent(topic string, handler func(...interface{}))
+	DeleteListenMessageStoreEvent(topic string, handler func(i ...interface{}))
+}

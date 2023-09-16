@@ -8,6 +8,7 @@ import (
 	"github.com/BAN1ce/skyTree/inner/broker"
 	"github.com/BAN1ce/skyTree/inner/broker/session"
 	"github.com/BAN1ce/skyTree/inner/broker/store"
+	"github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/inner/metric"
 	"github.com/BAN1ce/skyTree/inner/version"
@@ -32,7 +33,7 @@ type App struct {
 
 func NewApp() *App {
 	// todo: get config
-	metric.Init()
+	metric.Boot()
 	//var (
 	//	subTree = app2.NewApp()
 	//)
@@ -48,18 +49,24 @@ func NewApp() *App {
 	var (
 		clientManager  = broker.NewClientManager()
 		sessionManager = session.NewSessions(broker2.NewLocalSession())
-		dbStore        = store.NewLocalStore(nutsdb.Options{
+	)
+	var (
+		dbStore = store.NewLocalStore(nutsdb.Options{
 			EntryIdxMode: nutsdb.HintKeyValAndRAMIdxMode,
 			SegmentSize:  nutsdb.MB * 256,
 			NodeNum:      1,
 			RWMode:       nutsdb.MMap,
 			SyncEnable:   true,
 		}, nutsdb.WithDir("./data/nutsdb"))
+	)
+	event.Boot()
+	store.Boot(dbStore, event.GlobalEvent)
+	var (
 		publishRetrySchedule = facade.SinglePublishRetry()
 		app                  = &App{
 			brokerCore: broker.NewBroker(
 				broker.WithPublishRetry(publishRetrySchedule),
-				broker.WithStore(store.NewStoreWrapper(dbStore)),
+				broker.WithStore(store.NewStoreWrapper()),
 				broker.WithSessionManager(sessionManager),
 				broker.WithClientManager(clientManager),
 				broker.WithSubCenter(broker2.NewLocalSubCenter()),

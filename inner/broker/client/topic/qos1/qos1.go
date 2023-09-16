@@ -3,7 +3,7 @@ package qos1
 import (
 	"context"
 	"github.com/BAN1ce/skyTree/config"
-	"github.com/BAN1ce/skyTree/inner/broker/client/topic/store"
+	"github.com/BAN1ce/skyTree/inner/broker/store"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/packet"
@@ -24,10 +24,9 @@ type QoS1 struct {
 	publishChan  chan *packet.PublishMessage
 	publishQueue *PublishQueue
 	session      Session
-	*store.Help
 }
 
-func NewQos1(topic string, writer broker.PublishWriter, help *store.Help, session Session) *QoS1 {
+func NewQos1(topic string, writer broker.PublishWriter, session Session) *QoS1 {
 	latestMessageID, _ := session.ReadTopicLatestPushedMessageID(topic)
 	t := &QoS1{
 		meta: &meta{
@@ -38,7 +37,6 @@ func NewQos1(topic string, writer broker.PublishWriter, help *store.Help, sessio
 		},
 		publishQueue: NewPublishQueue(writer),
 		session:      session,
-		Help:         help,
 	}
 	return t
 }
@@ -66,7 +64,7 @@ func (q *QoS1) Start(ctx context.Context) {
 func (q *QoS1) readSessionUnFinishMessage() {
 	for _, msg := range q.session.ReadTopicUnFinishedMessage(q.meta.topic) {
 		ctx, cancel := context.WithTimeout(context.TODO(), 3*time.Second)
-		publishMessage, err := q.ClientMessageStore.ReadTopicMessagesByID(ctx, q.meta.topic, msg.MessageID, 1, true)
+		publishMessage, err := store.DefaultMessageStore.ReadTopicMessagesByID(ctx, q.meta.topic, msg.MessageID, 1, true)
 		cancel()
 		if err != nil {
 			logger.Logger.Error("read client.proto unAck publishChan message error", zap.Error(err), zap.String("store", q.meta.topic), zap.String("messageID", msg.MessageID))
@@ -101,7 +99,7 @@ func (q *QoS1) listenPublishChan() {
 				q.meta.latestMessageID = msg.MessageID
 			}
 		default:
-			if err := q.Help.ReadStore(q.ctx, q.meta.topic, q.meta.latestMessageID, q.meta.windowSize, false, q.writeToPublishChan); err != nil {
+			if err := store.ReadPublishMessage(q.ctx, q.meta.topic, q.meta.latestMessageID, q.meta.windowSize, false, q.writeToPublishChan); err != nil {
 				logger.Logger.Error("QoS2: read store error = ", zap.Error(err), zap.String("store", q.meta.topic))
 			}
 		}

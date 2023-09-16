@@ -51,6 +51,13 @@ func (l *LocalSubCenter) Match(topic string) (clientIDQos map[string]int32) {
 	return
 }
 
+func (l *LocalSubCenter) MatchTopic(topic string) (topics map[string]int32) {
+	rsp := l.state.MatchSubTopics(&api.MatchSubTopicRequest{
+		Topic: topic,
+	})
+	return rsp.Topic
+}
+
 func (l *LocalSubCenter) DeleteClient(clientID string) {
 	//TODO implement me
 	panic("implement me")

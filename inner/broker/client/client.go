@@ -6,7 +6,6 @@ import (
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/BAN1ce/skyTree/pkg/broker"
-	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/BAN1ce/skyTree/pkg/state"
 	"github.com/BAN1ce/skyTree/pkg/util"
@@ -33,7 +32,7 @@ type Handler interface {
 
 type Client struct {
 	ID                string `json:"id"`
-	connectProperties *packet.ConnectProperties
+	connectProperties *broker.SessionConnectProperties
 	ctx               context.Context
 	mux               sync.RWMutex
 	conn              net.Conn
@@ -48,6 +47,8 @@ type Client struct {
 	QoS2              *HandleQoS2
 	topicAlias        map[uint16]string
 	subIdentifier     map[string]int
+	willFlag          bool
+	keepAlive         time.Duration
 }
 
 func NewClient(conn net.Conn, option ...Option) *Client {
@@ -81,7 +82,7 @@ func (c *Client) Run(ctx context.Context, handler Handler) {
 		controlPacket, err = packets.ReadPacket(c.conn)
 		if err != nil {
 			logger.Logger.Info("read controlPacket error = ", zap.Error(err), zap.String("client", c.MetaString()))
-			c.closeHandleError()
+			c.afterClose()
 			return
 		}
 		handler.HandlePacket(c, controlPacket)
@@ -149,15 +150,15 @@ func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
-func (c *Client) closeHandleError() {
+func (c *Client) afterClose() {
 	logger.Logger.Info("client close", zap.String("clientID", c.ID))
 	if err := c.conn.Close(); err != nil {
-		logger.Logger.Warn("close conn error", zap.Error(err), zap.String("client", c.MetaString()))
+		logger.Logger.Info("close conn error", zap.Error(err), zap.String("client", c.MetaString()))
 	}
 	if err := c.topics.Close(); err != nil {
 		logger.Logger.Warn("close topics error", zap.Error(err), zap.String("client", c.MetaString()))
 	}
-	// TODO: check will message
+	// TODO: check will message, if will message is not nil, publish will message or create a delay task to publish will message
 	c.options.notifyClose.NotifyClientClose(c)
 }
 
@@ -216,16 +217,24 @@ func (c *Client) writePacket(packet packets.Packet) {
 	}
 }
 
-func (c *Client) SetSession(session broker.Session) error {
+func (c *Client) SetMeta(session broker.Session, keepAlive time.Duration) error {
 	c.mux.Lock()
 	c.options.session = session
-	c.topics = topic.NewTopicWithSession(c.ctx, c.options.session, topic.WithStore(c.options.Store), topic.WithWriter(c))
+	c.topics = topic.NewTopicWithSession(c.ctx, c.options.session, topic.WithWriter(c))
+	c.keepAlive = keepAlive
 	c.mux.Unlock()
 	return nil
 }
 
-func (c *Client) SetWill() {
+func (c *Client) GetSession() broker.Session {
+	c.mux.RLock()
+	defer c.mux.RUnlock()
+	return c.options.session
+}
 
+func (c *Client) SetWill(message *broker.WillMessage) error {
+	c.willFlag = true
+	return c.options.session.SetWillMessage(message)
 }
 
 func (c *Client) SetTopicAlias(topic string, alias uint16) {
@@ -234,9 +243,10 @@ func (c *Client) SetTopicAlias(topic string, alias uint16) {
 	c.mux.Unlock()
 }
 
-func (c *Client) SetConnectProperties(properties *packet.ConnectProperties) {
+func (c *Client) SetConnectProperties(properties *broker.SessionConnectProperties) {
 	c.mux.Lock()
 	c.connectProperties = properties
+	c.options.session.SetConnectProperties(properties)
 	c.mux.Unlock()
 }
 

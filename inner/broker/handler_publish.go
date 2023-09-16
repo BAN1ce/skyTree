@@ -2,7 +2,7 @@ package broker
 
 import (
 	"github.com/BAN1ce/skyTree/inner/broker/client"
-	"github.com/BAN1ce/skyTree/inner/broker/event"
+	"github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/logger"
 	broker2 "github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/errs"
@@ -56,8 +56,8 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 		return
 	}
 	var (
-		topic      = packet.Topic
-		subClients = broker.subTree.Match(topic)
+		topic     = packet.Topic
+		subTopics = broker.subTree.MatchTopic(topic)
 	)
 	// double check topic name
 	if topic == "" {
@@ -67,21 +67,22 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 	}
 
 	// TODO: should emit all wildcard store
-	event.Event.Emit(event.ClientPublish, topic)
-	event.Event.Emit(event.ReceivedTopicPublishEventName(topic), topic, packet)
+	// TODO: should emit all wildcard store
+	event.Driver.Emit(event.ClientPublish, topic)
+	event.Driver.Emit(event.ReceivedTopicPublishEventName(topic), topic, packet)
 
 	switch qos {
 	case broker2.QoS0:
 		return
 
 	case broker2.QoS1:
-		if len(subClients) == 0 {
+		if len(subTopics) == 0 {
 			pubAck.ReasonCode = packets.PubackNoMatchingSubscribers
 			broker.writePacket(client, pubAck)
 			return
 		}
 		// store message
-		if _, err = broker.store.StorePublishPacket(packet); err != nil {
+		if _, err = broker.store.StorePublishPacket(subTopics, packet); err != nil {
 			logger.Logger.Error("store publish packet error", zap.Error(err), zap.String("store", topic))
 			pubAck.ReasonCode = packets.PubackUnspecifiedError
 		} else {
@@ -91,7 +92,7 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 
 	case broker2.QoS2:
 		pubrec := packet2.NewPublishRec()
-		if len(subClients) == 0 {
+		if len(subTopics) == 0 {
 			pubrec.ReasonCode = packets.PubrecNoMatchingSubscribers
 			broker.writePacket(client, pubrec)
 			return

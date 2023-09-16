@@ -8,12 +8,12 @@ import (
 )
 
 type Controller struct {
-	broker.ClientMessageStore
+	broker.TopicMessageStore
 }
 
-func NewController(store broker.ClientMessageStore) *Controller {
+func NewController(store broker.TopicMessageStore) *Controller {
 	return &Controller{
-		ClientMessageStore: store,
+		TopicMessageStore: store,
 	}
 }
 

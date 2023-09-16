@@ -3,7 +3,7 @@ package qos2
 import (
 	"context"
 	"github.com/BAN1ce/skyTree/config"
-	"github.com/BAN1ce/skyTree/inner/broker/client/topic/store"
+	"github.com/BAN1ce/skyTree/inner/broker/store"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/packet"
@@ -19,11 +19,10 @@ type QoS2 struct {
 	meta        *meta
 	queue       *Queue
 	publishChan chan *packet.PublishMessage
-	*store.Help
-	session Session
+	session     Session
 }
 
-func NewQos2(topic string, writer broker.PublishWriter, help *store.Help, session Session) *QoS2 {
+func NewQos2(topic string, writer broker.PublishWriter, session Session) *QoS2 {
 	latestMessageID, _ := session.ReadTopicLatestPushedMessageID(topic)
 	t := &QoS2{
 		meta: &meta{
@@ -33,7 +32,6 @@ func NewQos2(topic string, writer broker.PublishWriter, help *store.Help, sessio
 			latestMessageID: latestMessageID,
 		},
 		queue:   NewQoS2Queue(writer),
-		Help:    help,
 		session: session,
 	}
 	return t
@@ -80,7 +78,7 @@ func (q *QoS2) listenPublishChan() {
 				q.meta.latestMessageID = msg.MessageID
 			}
 		default:
-			if err := q.Help.ReadStore(q.ctx, q.meta.topic, q.meta.latestMessageID, q.meta.windowSize, false, q.writeToPublishChan); err != nil {
+			if err := store.ReadPublishMessage(q.ctx, q.meta.topic, q.meta.latestMessageID, q.meta.windowSize, false, q.writeToPublishChan); err != nil {
 				logger.Logger.Error("QoS2: read store error = ", zap.Error(err), zap.String("store", q.meta.topic))
 			}
 		}
@@ -112,7 +110,7 @@ func (q *QoS2) readSessionUnFinishMessage() {
 			continue
 		}
 		ctx, cancel := context.WithTimeout(context.TODO(), 3*time.Second)
-		publishMessage, err := q.ClientMessageStore.ReadTopicMessagesByID(ctx, q.meta.topic, msg.MessageID, 1, true)
+		publishMessage, err := store.DefaultMessageStore.ReadTopicMessagesByID(ctx, q.meta.topic, msg.MessageID, 1, true)
 		cancel()
 		if err != nil {
 			logger.Logger.Error("read client.proto unAck publishChan message error", zap.Error(err), zap.String("store", q.meta.topic), zap.String("messageID", msg.MessageID))

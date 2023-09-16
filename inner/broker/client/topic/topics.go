@@ -5,7 +5,6 @@ import (
 	"github.com/BAN1ce/skyTree/inner/broker/client/topic/qos0"
 	"github.com/BAN1ce/skyTree/inner/broker/client/topic/qos1"
 	"github.com/BAN1ce/skyTree/inner/broker/client/topic/qos2"
-	"github.com/BAN1ce/skyTree/inner/broker/client/topic/store"
 	"github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
@@ -28,12 +27,6 @@ type QoS2Handle interface {
 
 type Option func(topics *Topics)
 
-func WithStore(store broker.ClientMessageStore) Option {
-	return func(topic *Topics) {
-		topic.store = store
-	}
-}
-
 func WithWriter(writer broker.PublishWriter) Option {
 	return func(topic *Topics) {
 		topic.writer = writer
@@ -50,7 +43,6 @@ type Topics struct {
 	ctx        context.Context
 	topic      map[string]Topic
 	session    broker.SessionTopic
-	store      broker.ClientMessageStore
 	writer     broker.PublishWriter
 	windowSize int
 }
@@ -145,13 +137,11 @@ func (t *Topics) createQoS0Topic(topicName string) Topic {
 }
 
 func (t *Topics) createQoS1Topic(topicName string, writer broker.PublishWriter) Topic {
-	return qos1.NewQos1(topicName, writer, store.NewStoreHelp(t.store, event.GlobalEvent, func(latestMessageID string) {
-		t.session.SetTopicLatestPushedMessageID(topicName, latestMessageID)
-	}), t.session)
+	return qos1.NewQos1(topicName, writer, t.session)
 }
 
 func (t *Topics) createQoS2Topic(topicName string, writer broker.PublishWriter) Topic {
-	return qos2.NewQos2(topicName, writer, store.NewStoreHelp(t.store, event.GlobalEvent), t.session)
+	return qos2.NewQos2(topicName, writer, t.session)
 }
 
 func (t *Topics) DeleteTopic(topicName string) {

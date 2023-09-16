@@ -25,6 +25,7 @@ type SubCenter interface {
 	DeleteSub(clientID string, topics []string) error
 	Match(topic string) (clientIDQos map[string]int32)
 	DeleteClient(clientID string)
+	MatchTopic(topic string) (topics map[string]int32)
 }
 
 func Int32ToQoS(qos int32) QoS {

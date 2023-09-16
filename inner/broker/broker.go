@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/BAN1ce/skyTree/config"
 	"github.com/BAN1ce/skyTree/inner/broker/client"
-	"github.com/BAN1ce/skyTree/inner/broker/event"
 	"github.com/BAN1ce/skyTree/inner/broker/server"
 	"github.com/BAN1ce/skyTree/inner/broker/store"
 	"github.com/BAN1ce/skyTree/inner/facade"
@@ -55,24 +54,24 @@ type Broker struct {
 
 func NewBroker(option ...Option) *Broker {
 	var (
-		ip     = `127.0.0.1`
-		port   = config.GetServer().GetBrokerPort()
-		broker = &Broker{
+		ip   = `127.0.0.1`
+		port = config.GetServer().GetBrokerPort()
+		b    = &Broker{
 			publishPool:   pool.NewPublish(),
 			preMiddleware: make(map[byte][]middleware.PacketMiddleware),
 		}
 	)
-	broker.initMiddleware()
+	b.initMiddleware()
 	tcpAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", ip, port))
 	if err != nil {
 		log.Fatalln("resolve tcp addr error: ", err)
 	}
-	broker.server = server.NewTCPServer(tcpAddr)
+	b.server = server.NewTCPServer(tcpAddr)
 	for _, opt := range option {
-		opt(broker)
+		opt(b)
 	}
 
-	return broker
+	return b
 }
 
 func (b *Broker) Name() string {
@@ -96,7 +95,7 @@ func (b *Broker) acceptConn() {
 			logger.Logger.Info("server closed")
 			return
 		}
-		newClient := client.NewClient(conn, client.WithStore(b.store), client.WithConfig(client.Config{
+		newClient := client.NewClient(conn, client.WithConfig(client.Config{
 			WindowSize:       10,
 			ReadStoreTimeout: 3 * time.Second,
 		}), client.WithNotifyClose(b))
@@ -120,13 +119,11 @@ func (b *Broker) HandlePacket(client *client.Client, packet *packets.ControlPack
 	logger.Logger.Debug("handle packet", zap.String("client", client.MetaString()), zap.Any("packet", packet))
 	switch packet.FixedHeader.Type {
 	case packets.CONNECT:
-		event.Event.Emit(event.Connect)
 		b.handlers.Connect.Handle(b, client, packet)
 	case packets.PUBLISH:
 		b.handlers.Publish.Handle(b, client, packet)
 
 	case packets.PUBACK:
-		event.Event.Emit(event.ClientPublishAck)
 		b.handlers.PublishAck.Handle(b, client, packet)
 	case packets.PUBREC:
 		b.handlers.PublishRec.Handle(b, client, packet)
@@ -136,19 +133,14 @@ func (b *Broker) HandlePacket(client *client.Client, packet *packets.ControlPack
 		b.handlers.PublishComp.Handle(b, client, packet)
 
 	case packets.SUBSCRIBE:
-		event.Event.Emit(event.Subscribe)
 		b.handlers.Sub.Handle(b, client, packet)
 	case packets.UNSUBSCRIBE:
-		event.Event.Emit(event.Unsubscribe)
 		b.handlers.UnSub.Handle(b, client, packet)
 	case packets.PINGREQ:
-		event.Event.Emit(event.Ping)
 		b.handlers.Ping.Handle(b, client, packet)
 	case packets.DISCONNECT:
-		event.Event.Emit(event.Disconnect)
 		b.handlers.Disconnect.Handle(b, client, packet)
 	case packets.AUTH:
-		event.Event.Emit(event.ClientAuth)
 		b.handlers.Auth.Handle(b, client, packet)
 	default:
 		logger.Logger.Warn("unknown packet type = ", zap.Uint8("type", packet.FixedHeader.Type))

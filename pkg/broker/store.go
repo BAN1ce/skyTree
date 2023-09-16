@@ -20,8 +20,7 @@ type PublishElement interface {
 }
 
 type Store interface {
-	ClientMessageStore
-	PublishedStore
+	TopicMessageStore
 }
 
 type TopicStoreInfo interface {
@@ -29,12 +28,9 @@ type TopicStoreInfo interface {
 	DeleteTopicMessages(ctx context.Context, topic string) error
 }
 
-type ClientMessageStore interface {
+type TopicMessageStore interface {
 	ReadFromTimestamp(ctx context.Context, topic string, timestamp time.Time, limit int) ([]packet.PublishMessage, error)
 	ReadTopicMessagesByID(ctx context.Context, topic, id string, limit int, include bool) ([]packet.PublishMessage, error)
-}
-
-type PublishedStore interface {
 	CreatePacket(topic string, value []byte) (id string, err error)
 }
 

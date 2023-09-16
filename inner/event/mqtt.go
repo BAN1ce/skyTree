@@ -5,7 +5,7 @@ import (
 )
 
 var (
-	Event = events.New()
+	Driver = events.New()
 )
 
 const (

@@ -4,36 +4,12 @@ import (
 	"encoding/json"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
+	"github.com/BAN1ce/skyTree/pkg/errs"
 	"go.uber.org/zap"
 	"strconv"
 	"strings"
 	"time"
 )
-
-const (
-	KeyClientPrefix               = "client/"
-	KeyClientUnAckMessageID       = `/unack/message_id`
-	keyClientUnfinishedMessage    = `/unfinished/message`
-	KeyClientUnRecPacketID        = `/unrec/packet_id`
-	KeyClientUnCompPacketID       = `/uncomp/packet_id`
-	KeyClientLatestAliveTime      = `/latest_alive_time`
-	KeyClientLatestAckedMessageID = `/latest_acked_message_id`
-	KeyClientSubTopic             = `/sub_topic`
-)
-
-func clientKey(clientID string) *strings.Builder {
-	var build = strings.Builder{}
-	build.WriteString(KeyClientPrefix)
-	build.WriteString(clientID)
-	return &build
-
-}
-func withClientKey(key, clientID string) string {
-	build := clientKey(clientID)
-	build.WriteString("/")
-	build.WriteString(key)
-	return build.String()
-}
 
 type Session struct {
 	clientID string
@@ -160,4 +136,58 @@ func (s *Session) DeleteTopicUnFinishedMessage(topic string, messageID string) {
 	if err := s.store.DefaultDeleteKey(clientTopicUnFinishedMessagePrefix(s.clientID, topic)); err != nil {
 		logger.Logger.Error("delete topic unfinished message failed", zap.Error(err), zap.String("clientID", s.clientID))
 	}
+}
+
+func (s *Session) GetWillMessage() (*broker.WillMessage, error) {
+	var message broker.WillMessage
+	if value, ok, _ := s.store.DefaultReadKey(clientWillMessageKey(s.clientID)); ok {
+		if err := json.Unmarshal([]byte(value), &message); err != nil {
+			logger.Logger.Error("unmarshal will message failed", zap.Error(err), zap.String("clientID", s.clientID))
+			return &message, err
+		}
+		return &message, nil
+
+	}
+	return nil, errs.ErrSessionWillMessageNotFound
+
+}
+
+func (s *Session) SetWillMessage(message *broker.WillMessage) error {
+	if jBody, err := json.Marshal(message); err != nil {
+		return err
+	} else {
+		return s.store.DefaultPutKey(clientWillMessageKey(s.clientID), string(jBody))
+	}
+}
+
+func (s *Session) GetConnectProperties() (*broker.SessionConnectProperties, error) {
+	var (
+		properties broker.SessionConnectProperties
+	)
+	value, ok, err := s.store.DefaultReadKey(clientConnectPropertiesKey(s.clientID))
+	if err != nil {
+		logger.Logger.Error("read connect properties failed", zap.Error(err), zap.String("clientID", s.clientID))
+		return &properties, err
+	}
+	if !ok {
+		return &properties, errs.ErrSessionConnectPropertiesNotFound
+	}
+	if err := json.Unmarshal([]byte(value), &properties); err != nil {
+		logger.Logger.Error("unmarshal connect properties failed", zap.Error(err), zap.String("clientID", s.clientID))
+		return &properties, err
+	}
+	return &properties, nil
+}
+
+func (s *Session) SetConnectProperties(properties *broker.SessionConnectProperties) error {
+	value, err := json.Marshal(properties)
+	if err != nil {
+		logger.Logger.Error("marshal connect properties failed", zap.Error(err), zap.String("clientID", s.clientID))
+		return err
+	}
+	if err := s.store.DefaultPutKey(clientConnectPropertiesKey(s.clientID), string(value)); err != nil {
+		logger.Logger.Error("set connect properties failed", zap.Error(err), zap.String("clientID", s.clientID))
+		return err
+	}
+	return nil
 }

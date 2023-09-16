@@ -34,4 +34,10 @@ var (
 	ErrStoreMessageExpired = errors.New("store message expired")
 	ErrStoreVersionInvalid = errors.New("store version invalid")
 	ErrStoreReadCreateTime = errors.New("read create time failed")
+	ErrStoreTopicsEmpty    = errors.New("store topics empty")
+)
+
+var (
+	ErrSessionConnectPropertiesNotFound = errors.New("session connect properties not found")
+	ErrSessionWillMessageNotFound       = errors.New("session will message not found")
 )
