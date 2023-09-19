@@ -11,7 +11,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockSessionStore is a mock of SessionStore interface.
+// MockSessionStore is a mock of KeyValueStore interface.
 type MockSessionStore struct {
 	ctrl     *gomock.Controller
 	recorder *MockSessionStoreMockRecorder

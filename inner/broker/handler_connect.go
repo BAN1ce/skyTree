@@ -6,6 +6,7 @@ import (
 	broker2 "github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/errs"
 	packet2 "github.com/BAN1ce/skyTree/pkg/packet"
+	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/BAN1ce/skyTree/pkg/state"
 	"github.com/eclipse/paho.golang/packets"
 	"github.com/google/uuid"
@@ -32,14 +33,8 @@ func (c *ConnectHandler) Handle(broker *Broker, client *client2.Client, packet *
 		connectPacket, _ = packet.Content.(*packets.Connect)
 		conAck           = packets.NewControlPacket(packets.CONNACK).Content.(*packets.Connack)
 	)
-	// default ack code is success
-	conAck.ReasonCode = packets.ConnackSuccess
-	// parse connect properties and check
-	if err = c.handleConnectProperties(broker, client, connectPacket, conAck); err != nil {
-		broker.writePacket(client, conAck)
-		client.Close()
-		return
-	}
+	conAck.ReasonCode = packets.ConnackServerUnavailable
+
 	// handle clean start flag
 	if err = c.handleCleanStart(broker, client, *connectPacket, conAck); err != nil {
 		logger.Logger.Warn("handle clean start error: ", zap.Error(err), zap.String("client", client.MetaString()))
@@ -47,18 +42,24 @@ func (c *ConnectHandler) Handle(broker *Broker, client *client2.Client, packet *
 		client.Close()
 		return
 	}
-	// TODO: handle will message
-	if connectPacket.WillFlag {
-		// client.proto.Set(pkg.WillFlag, pkg.WillFlagTrue)
-		if err := client.SetWill(broker2.ConnectPacketToWillMessage(connectPacket)); err != nil {
-			conAck.ReasonCode = packets.ConnackServerUnavailable
-			logger.Logger.Warn("set will message error: ", zap.Error(err), zap.String("client", client.MetaString()))
-			broker.writePacket(client, conAck)
-			client.Close()
-			return
-		}
+
+	// parse connect properties and check
+	if err = c.handleConnectProperties(broker, client, connectPacket, conAck); err != nil {
+		logger.Logger.Warn("handle connect properties error: ", zap.Error(err), zap.String("client", client.MetaString()))
+		broker.writePacket(client, conAck)
+		client.Close()
+		return
 	}
 
+	// handle will message
+	if err = c.handleWillMessage(broker, connectPacket, client.GetSession()); err != nil {
+		logger.Logger.Warn("handle will message error: ", zap.Error(err), zap.String("client", client.MetaString()))
+		broker.writePacket(client, conAck)
+		client.Close()
+		return
+	}
+
+	conAck.ReasonCode = packets.ConnackSuccess
 	broker.CreateClient(client)
 	broker.writePacket(client, conAck)
 }
@@ -100,7 +101,6 @@ func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client
 	} else {
 		session, exists = broker.sessionManager.ReadSession(clientID)
 		if !exists {
-			// create new client.proto for client
 			session = broker.sessionManager.NewSession(clientID)
 			broker.sessionManager.CreateSession(clientID, session)
 		} else {
@@ -114,4 +114,28 @@ func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client
 	}
 	client.SetID(clientID)
 	return nil
+}
+
+// handleWillMessage handle will message, if willing flag is true, store will message to store and set will message id to broker state.
+func (c *ConnectHandler) handleWillMessage(broker *Broker, connect *packets.Connect, session broker2.Session) error {
+	if !connect.WillFlag {
+		return nil
+	}
+	var (
+		publishMessage = pool.PublishPool.Get()
+	)
+	publishMessage.Topic = connect.WillTopic
+	publishMessage.Payload = connect.WillMessage
+	publishMessage.QoS = connect.WillQOS
+	// TODO: fill publish message properties and other fields
+	messageID, err := broker.store.StorePublishPacket(map[string]int32{
+		connect.WillTopic: int32(connect.WillQOS),
+	}, publishMessage)
+	if err != nil {
+		return err
+	}
+	if err := broker.state.CreateTopicWillMessageID(connect.WillTopic, messageID, connect.WillRetain); err != nil {
+		return err
+	}
+	return session.SetWillMessage(broker2.ConnectPacketToWillMessage(connect, messageID))
 }

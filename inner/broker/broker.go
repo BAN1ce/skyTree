@@ -6,11 +6,13 @@ import (
 	"github.com/BAN1ce/skyTree/config"
 	"github.com/BAN1ce/skyTree/inner/broker/client"
 	"github.com/BAN1ce/skyTree/inner/broker/server"
+	"github.com/BAN1ce/skyTree/inner/broker/state"
 	"github.com/BAN1ce/skyTree/inner/broker/store"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/middleware"
+	packet2 "github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/eclipse/paho.golang/packets"
 	"go.uber.org/zap"
@@ -40,6 +42,7 @@ type brokerHandler interface {
 type Broker struct {
 	ctx            context.Context
 	server         *server.Server
+	state          *state.State
 	userAuth       middleware.UserAuth
 	subTree        broker.SubCenter
 	store          *store.Wrapper
@@ -104,7 +107,6 @@ func (b *Broker) acceptConn() {
 			c.Run(b.ctx, b)
 			logger.Logger.Info("client closed", zap.String("client", c.MetaString()))
 			wg.Done()
-			b.DeleteClient(c.ID)
 		}(newClient)
 	}
 }
@@ -180,4 +182,25 @@ func (b *Broker) NotifyClientClose(client *client.Client) {
 	b.mux.Lock()
 	b.clientManager.deleteClient(client)
 	b.mux.Unlock()
+}
+
+func (b *Broker) NotifyWillMessage(message *broker.WillMessage) {
+	var (
+		willPublishMessage *packet2.PublishMessage
+		ctx, cancel        = context.WithCancel(b.ctx)
+	)
+	cancel()
+	// TODO: confirm will message ID
+	if err := store.ReadPublishMessage(ctx, message.Topic, message.MessageID, 1, true, func(message *packet2.PublishMessage) {
+		willPublishMessage = message
+	}); err != nil {
+		logger.Logger.Error("read will message error", zap.Error(err))
+		return
+	}
+	clients := b.subTree.Match(message.Topic)
+	pubMessage := message.ToPublishPacket()
+	pubMessage.Payload = willPublishMessage.PublishPacket.Payload
+	for id := range clients {
+		b.clientManager.Write(id, pubMessage)
+	}
 }

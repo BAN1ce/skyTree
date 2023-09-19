@@ -21,8 +21,8 @@ func (s *SubHandler) Handle(broker *Broker, client *client.Client, rawPacket *pa
 	)
 	subAck.PacketID = packet.PacketID
 	result := client.HandleSub(packet)
-	for topic := range packet.Subscriptions {
-		subAck.Reasons = append(subAck.Reasons, result[topic])
+	for _, topic := range packet.Subscriptions {
+		subAck.Reasons = append(subAck.Reasons, result[topic.Topic])
 	}
 	broker.writePacket(client, subAck)
 }

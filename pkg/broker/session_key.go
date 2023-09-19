@@ -1,4 +1,4 @@
-package session
+package broker
 
 import "strings"
 
@@ -15,31 +15,31 @@ const (
 	KeyWillMessage                = `/will_message`
 )
 
-func clientKey(clientID string) *strings.Builder {
+func ClientKey(clientID string) *strings.Builder {
 	var build = strings.Builder{}
 	build.WriteString(KeyClientPrefix)
 	build.WriteString(clientID)
 	return &build
 
 }
-func withClientKey(key, clientID string) string {
-	build := clientKey(clientID)
+func WithClientKey(key, clientID string) string {
+	build := ClientKey(clientID)
 	build.WriteString("/")
 	build.WriteString(key)
 	return build.String()
 }
-func clientSubTopicKeyPrefix(clientID string) string {
+func ClientSubTopicKeyPrefix(clientID string) string {
 	var (
-		build = clientKey(clientID)
+		build = ClientKey(clientID)
 	)
 	build.WriteString(KeyClientSubTopic)
 	build.WriteString("/")
 	return build.String()
 }
 
-func clientSubTopicKey(clientID, topic string) string {
+func ClientSubTopicKey(clientID, topic string) string {
 	var (
-		build = clientKey(clientID)
+		build = ClientKey(clientID)
 	)
 	build.WriteString(KeyClientSubTopic)
 	build.WriteString("/")
@@ -47,9 +47,9 @@ func clientSubTopicKey(clientID, topic string) string {
 	return build.String()
 }
 
-func clientTopicUnAckKeyPrefix(clientID, topic string) string {
+func ClientTopicUnAckKeyPrefix(clientID, topic string) string {
 	var (
-		build = clientKey(clientID)
+		build = ClientKey(clientID)
 	)
 	build.WriteString(KeyClientUnAckMessageID)
 	build.WriteString("/")
@@ -57,9 +57,9 @@ func clientTopicUnAckKeyPrefix(clientID, topic string) string {
 	return build.String()
 }
 
-func clientTopicUnFinishedMessagePrefix(clientID, topic string) string {
+func ClientTopicUnFinishedMessagePrefix(clientID, topic string) string {
 	var (
-		build = clientKey(clientID)
+		build = ClientKey(clientID)
 	)
 	build.WriteString(keyClientUnfinishedMessage)
 	build.WriteString("/")
@@ -68,9 +68,9 @@ func clientTopicUnFinishedMessagePrefix(clientID, topic string) string {
 
 }
 
-func clientTopicUnAckKey(clientID, topic, messageID string) string {
+func ClientTopicUnAckKey(clientID, topic, messageID string) string {
 	var (
-		build = clientKey(clientID)
+		build = ClientKey(clientID)
 	)
 	build.WriteString(KeyClientUnAckMessageID)
 	build.WriteString("/")
@@ -80,17 +80,17 @@ func clientTopicUnAckKey(clientID, topic, messageID string) string {
 	return build.String()
 }
 
-func clientConnectPropertiesKey(clientID string) string {
+func ClientConnectPropertiesKey(clientID string) string {
 	var (
-		build = clientKey(clientID)
+		build = ClientKey(clientID)
 	)
 	build.WriteString(KeyConnectProperties)
 	return build.String()
 }
 
-func clientWillMessageKey(clientID string) string {
+func ClientWillMessageKey(clientID string) string {
 	var (
-		build = clientKey(clientID)
+		build = ClientKey(clientID)
 	)
 	build.WriteString(KeyWillMessage)
 	return build.String()

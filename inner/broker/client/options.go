@@ -6,7 +6,9 @@ import (
 
 type NotifyClientClose interface {
 	NotifyClientClose(c *Client)
+	NotifyWillMessage(message *broker.WillMessage)
 }
+
 type Option func(*Options)
 
 type Options struct {

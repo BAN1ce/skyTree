@@ -12,4 +12,5 @@ type PublishMessage struct {
 	FromSession   bool
 	TimeStamp     int64
 	ExpiredTime   int64
+	Will          bool
 }

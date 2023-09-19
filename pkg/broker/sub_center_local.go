@@ -16,10 +16,10 @@ func NewLocalSubCenter() *LocalSubCenter {
 		state: store.NewState(),
 	}
 }
-func (l *LocalSubCenter) CreateSub(clientID string, topics map[string]packets.SubOptions) error {
+func (l *LocalSubCenter) CreateSub(clientID string, topics []packets.SubOptions) error {
 	var topicsRequest = make(map[string]*proto.SubInfo)
-	for topic, opt := range topics {
-		topicsRequest[topic] = &proto.SubInfo{
+	for _, opt := range topics {
+		topicsRequest[opt.Topic] = &proto.SubInfo{
 			QoS: int32(opt.QoS),
 		}
 	}

@@ -13,4 +13,5 @@ var (
 func Boot(store broker.TopicMessageStore, event broker.MessageStoreEvent) {
 	DefaultMessageStore = store
 	DefaultMessageStoreEvent = event
+	DefaultSerializerVersion = broker.SerialVersion1
 }

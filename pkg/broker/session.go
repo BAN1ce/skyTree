@@ -59,6 +59,11 @@ type SessionCreateConnectProperties interface {
 	SetConnectProperties(properties *SessionConnectProperties) error
 }
 
+type SessionWillMessage interface {
+	GetWillMessage() (*WillMessage, error)
+	SetWillMessage(message *WillMessage) error
+}
+
 type UserProperties = packets.User
 
 type WillProperties struct {
@@ -71,23 +76,24 @@ type WillProperties struct {
 	UserProperties    []UserProperties `json:"user_properties"`
 }
 type WillMessage struct {
-	Topic    string         `json:"topic"`
-	Payload  []byte         `json:"payload"`
-	QoS      uint8          `json:"qos"`
-	Retain   bool           `json:"retain"`
-	Property WillProperties `json:"property"`
-}
-type SessionWillMessage interface {
-	GetWillMessage() (*WillMessage, error)
-	SetWillMessage(message *WillMessage) error
+	MessageID string
+	Topic     string         `json:"topic"`
+	QoS       int            `json:"qos"`
+	Property  WillProperties `json:"property"`
 }
 
-func ConnectPacketToWillMessage(connect *packets.Connect) *WillMessage {
+func (w *WillMessage) ToPublishPacket() *packets.Publish {
+	return &packets.Publish{
+		Topic: w.Topic,
+		QoS:   byte(w.QoS),
+	}
+}
+
+func ConnectPacketToWillMessage(connect *packets.Connect, messageID string) *WillMessage {
 	return &WillMessage{
-		Topic:   connect.WillTopic,
-		Payload: connect.WillMessage,
-		QoS:     connect.WillQOS,
-		Retain:  connect.WillRetain,
+		MessageID: messageID,
+		Topic:     connect.WillTopic,
+		QoS:       int(connect.WillQOS),
 		Property: WillProperties{
 			WillDelayInterval: int64(*connect.WillProperties.WillDelayInterval),
 			PayloadFormat:     int64(*connect.WillProperties.PayloadFormat),
@@ -98,5 +104,4 @@ func ConnectPacketToWillMessage(connect *packets.Connect) *WillMessage {
 			UserProperties:    connect.WillProperties.User,
 		},
 	}
-
 }

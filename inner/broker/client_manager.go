@@ -33,6 +33,7 @@ func (c *ClientManager) DeleteClient(clientID string) {
 func (c *ClientManager) createClient(client *client.Client) {
 	if tmp, ok := c.clients[client.ID]; ok {
 		if tmp != client {
+			logger.Logger.Warn("client already exist", zap.String("clientID", client.ID))
 			tmp.Close()
 		}
 	}

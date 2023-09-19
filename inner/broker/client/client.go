@@ -100,14 +100,14 @@ func (c *Client) HandleSub(subscribe *packets.Subscribe) map[string]byte {
 	// store topic's subIdentifier
 	if tmp := subscribe.Properties.SubscriptionIdentifier; tmp != nil {
 		subIdentifier = *tmp
-		for t := range topics {
-			c.subIdentifier[t] = subIdentifier
+		for _, t := range topics {
+			c.subIdentifier[t.Topic] = subIdentifier
 		}
 	}
 	// create topic instance
-	for t, v := range topics {
-		c.topics.CreateTopic(t, v.QoS)
-		failed[t] = v.QoS
+	for _, t := range topics {
+		c.topics.CreateTopic(t.Topic, t.QoS)
+		failed[t.Topic] = t.QoS
 	}
 	return failed
 }
@@ -158,7 +158,16 @@ func (c *Client) afterClose() {
 	if err := c.topics.Close(); err != nil {
 		logger.Logger.Warn("close topics error", zap.Error(err), zap.String("client", c.MetaString()))
 	}
-	// TODO: check will message, if will message is not nil, publish will message or create a delay task to publish will message
+	if c.options.session != nil {
+		// TODO: check will message, if will message is not nil, publish will message or create a delay task to publish will message
+		if willMessage, err := c.options.session.GetWillMessage(); err != nil {
+			logger.Logger.Error("get will message error", zap.Error(err), zap.String("client", c.MetaString()))
+		} else {
+			if willMessage.Property.WillDelayInterval == 0 {
+				c.options.notifyClose.NotifyWillMessage(willMessage)
+			}
+		}
+	}
 	c.options.notifyClose.NotifyClientClose(c)
 }
 

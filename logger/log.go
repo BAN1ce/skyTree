@@ -28,7 +28,7 @@ func init() {
 				StacktraceKey:  "stacktrace",
 				LineEnding:     zapcore.DefaultLineEnding,
 				EncodeLevel:    zapcore.LowercaseColorLevelEncoder,
-				EncodeTime:     zapcore.ISO8601TimeEncoder,
+				EncodeTime:     zapcore.RFC3339NanoTimeEncoder,
 				EncodeDuration: zapcore.SecondsDurationEncoder,
 				EncodeCaller:   zapcore.ShortCallerEncoder,
 			},

@@ -23,20 +23,20 @@ func Test_clientKey(t *testing.T) {
 			args: args{
 				clientID: "",
 			},
-			want: KeyClientPrefix,
+			want: broker.KeyClientPrefix,
 		},
 		{
 			name: "client1",
 			args: args{
 				clientID: "client1",
 			},
-			want: KeyClientPrefix + "client1",
+			want: broker.KeyClientPrefix + "client1",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := clientKey(tt.args.clientID).String(); got != tt.want {
-				t.Errorf("clientKey() = %v, want %v", got, tt.want)
+			if got := broker.ClientKey(tt.args.clientID).String(); got != tt.want {
+				t.Errorf("ClientKey() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -58,7 +58,7 @@ func Test_withClientKey(t *testing.T) {
 				key:      "",
 				clientID: "",
 			},
-			want: KeyClientPrefix + "/",
+			want: broker.KeyClientPrefix + "/",
 		},
 		{
 			name: "client1",
@@ -66,7 +66,7 @@ func Test_withClientKey(t *testing.T) {
 				key:      "",
 				clientID: "client1",
 			},
-			want: KeyClientPrefix + "client1/",
+			want: broker.KeyClientPrefix + "client1/",
 		},
 		{
 			name: "client1&key1",
@@ -74,13 +74,13 @@ func Test_withClientKey(t *testing.T) {
 				key:      "key1",
 				clientID: "client1",
 			},
-			want: KeyClientPrefix + "client1" + "/" + "key1",
+			want: broker.KeyClientPrefix + "client1" + "/" + "key1",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := withClientKey(tt.args.key, tt.args.clientID); got != tt.want {
-				t.Errorf("withClientKey() = %v, want %v", got, tt.want)
+			if got := broker.WithClientKey(tt.args.key, tt.args.clientID); got != tt.want {
+				t.Errorf("WithClientKey() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -95,12 +95,12 @@ func TestSession_Release(t *testing.T) {
 	defer ctl.Finish()
 	mockSessionStore := mock.NewMockSessionStore(ctl)
 	mockSessionStore.EXPECT().DeleteKey(gomock.Any(), "").Return(errors.New("delete key is empty")).AnyTimes()
-	mockSessionStore.EXPECT().DeleteKey(gomock.Any(), gomock.Eq(clientKey(clientID).String())).Return(nil).AnyTimes()
+	mockSessionStore.EXPECT().DeleteKey(gomock.Any(), gomock.Eq(broker.ClientKey(clientID).String())).Return(nil).AnyTimes()
 
-	sessionStore := broker.NewSessionStoreWithTimout(mockSessionStore, 10)
+	sessionStore := broker.NewKeyValueStoreWithTimout(mockSessionStore, 10)
 	type fields struct {
 		clientID string
-		store    *broker.SessionStoreWithTimeout
+		store    *broker.KeyValueStoreWithTimeout
 	}
 	tests := []struct {
 		name   string
@@ -137,17 +137,17 @@ func TestSession_ReadSubTopics(t *testing.T) {
 		ctl       = gomock.NewController(t)
 		clientID  = "123"
 		subTopics = map[string]string{
-			clientSubTopicKey(clientID, "123"):  "1",
-			clientSubTopicKey(clientID, "1234"): "2",
+			broker.ClientSubTopicKey(clientID, "123"):  "1",
+			broker.ClientSubTopicKey(clientID, "1234"): "2",
 		}
 	)
 	defer ctl.Finish()
 	mockSessionStore := mock.NewMockSessionStore(ctl)
-	mockSessionStore.EXPECT().ReadPrefixKey(gomock.Any(), gomock.Eq(clientSubTopicKeyPrefix(clientID))).Return(subTopics, nil).AnyTimes()
-	sessionStore := broker.NewSessionStoreWithTimout(mockSessionStore, 10)
+	mockSessionStore.EXPECT().ReadPrefixKey(gomock.Any(), gomock.Eq(broker.ClientSubTopicKeyPrefix(clientID))).Return(subTopics, nil).AnyTimes()
+	sessionStore := broker.NewKeyValueStoreWithTimout(mockSessionStore, 10)
 	type fields struct {
 		clientID string
-		store    *broker.SessionStoreWithTimeout
+		store    *broker.KeyValueStoreWithTimeout
 	}
 	tests := []struct {
 		name       string
@@ -187,11 +187,11 @@ func TestSession_CreateSubTopic(t *testing.T) {
 	)
 	defer ctl.Finish()
 	mockSessionStore := mock.NewMockSessionStore(ctl)
-	mockSessionStore.EXPECT().PutKey(gomock.Any(), gomock.Eq(clientSubTopicKey(clientID, topic)), gomock.Eq("1")).Return(nil).AnyTimes()
-	sessionStore := broker.NewSessionStoreWithTimout(mockSessionStore, 10)
+	mockSessionStore.EXPECT().PutKey(gomock.Any(), gomock.Eq(broker.ClientSubTopicKey(clientID, topic)), gomock.Eq("1")).Return(nil).AnyTimes()
+	sessionStore := broker.NewKeyValueStoreWithTimout(mockSessionStore, 10)
 	type fields struct {
 		clientID string
-		store    *broker.SessionStoreWithTimeout
+		store    *broker.KeyValueStoreWithTimeout
 	}
 	type args struct {
 		topic string
@@ -244,11 +244,11 @@ func TestSession_DeleteSubTopic(t *testing.T) {
 	)
 	defer ctl.Finish()
 	mockSessionStore := mock.NewMockSessionStore(ctl)
-	mockSessionStore.EXPECT().DeleteKey(gomock.Any(), gomock.Eq(clientSubTopicKey(clientID, topic))).Return(nil).AnyTimes()
-	sessionStore := broker.NewSessionStoreWithTimout(mockSessionStore, 10)
+	mockSessionStore.EXPECT().DeleteKey(gomock.Any(), gomock.Eq(broker.ClientSubTopicKey(clientID, topic))).Return(nil).AnyTimes()
+	sessionStore := broker.NewKeyValueStoreWithTimout(mockSessionStore, 10)
 	type fields struct {
 		clientID string
-		store    *broker.SessionStoreWithTimeout
+		store    *broker.KeyValueStoreWithTimeout
 	}
 	type args struct {
 		topic string
@@ -302,16 +302,16 @@ func TestSession_ReadTopicUnAckMessageID(t *testing.T) {
 		keyValue = map[string]string{}
 	)
 	for _, id := range messageID {
-		keyValue[clientTopicUnAckKey(clientID, topic, id)] = id
+		keyValue[broker.ClientTopicUnAckKey(clientID, topic, id)] = id
 	}
 	defer ctl.Finish()
 	mockSessionStore := mock.NewMockSessionStore(ctl)
-	mockSessionStore.EXPECT().ReadPrefixKey(gomock.Any(), gomock.Eq(clientTopicUnAckKeyPrefix(clientID, topic))).Return(keyValue, nil).AnyTimes()
-	sessionStore := broker.NewSessionStoreWithTimout(mockSessionStore, 10)
+	mockSessionStore.EXPECT().ReadPrefixKey(gomock.Any(), gomock.Eq(broker.ClientTopicUnAckKeyPrefix(clientID, topic))).Return(keyValue, nil).AnyTimes()
+	sessionStore := broker.NewKeyValueStoreWithTimout(mockSessionStore, 10)
 
 	type fields struct {
 		clientID string
-		store    *broker.SessionStoreWithTimeout
+		store    *broker.KeyValueStoreWithTimeout
 	}
 	type args struct {
 		topic string
@@ -370,16 +370,16 @@ func TestSession_CreateTopicUnAckMessageID(t *testing.T) {
 		keyValue = map[string]string{}
 	)
 	for _, id := range messageID {
-		keyValue[clientTopicUnAckKey(clientID, topic, id)] = id
+		keyValue[broker.ClientTopicUnAckKey(clientID, topic, id)] = id
 	}
 	defer ctl.Finish()
 	mockSessionStore := mock.NewMockSessionStore(ctl)
-	mockSessionStore.EXPECT().PutKey(gomock.Any(), gomock.Eq(clientTopicUnAckKey(clientID, topic, messageID[0])), gomock.Eq(messageID[0])).Return(nil)
-	mockSessionStore.EXPECT().PutKey(gomock.Any(), gomock.Eq(clientTopicUnAckKey(clientID, topic, messageID[1])), gomock.Eq(messageID[1])).Return(nil)
-	sessionStore := broker.NewSessionStoreWithTimout(mockSessionStore, 10)
+	mockSessionStore.EXPECT().PutKey(gomock.Any(), gomock.Eq(broker.ClientTopicUnAckKey(clientID, topic, messageID[0])), gomock.Eq(messageID[0])).Return(nil)
+	mockSessionStore.EXPECT().PutKey(gomock.Any(), gomock.Eq(broker.ClientTopicUnAckKey(clientID, topic, messageID[1])), gomock.Eq(messageID[1])).Return(nil)
+	sessionStore := broker.NewKeyValueStoreWithTimout(mockSessionStore, 10)
 	type fields struct {
 		clientID string
-		store    *broker.SessionStoreWithTimeout
+		store    *broker.KeyValueStoreWithTimeout
 	}
 	type args struct {
 		topic     string
@@ -427,7 +427,7 @@ func TestSession_CreateTopicUnAckMessageID(t *testing.T) {
 func TestSession_DeleteTopicUnAckMessageID(t *testing.T) {
 	type fields struct {
 		clientID string
-		store    *broker.SessionStoreWithTimeout
+		store    *broker.KeyValueStoreWithTimeout
 	}
 	type args struct {
 		topic     string

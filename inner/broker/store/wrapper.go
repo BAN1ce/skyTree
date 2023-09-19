@@ -1,13 +1,13 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	event2 "github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/errs"
 	packet2 "github.com/BAN1ce/skyTree/pkg/packet"
-	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/eclipse/paho.golang/packets"
 	"go.uber.org/zap"
 	"time"
@@ -27,14 +27,13 @@ func NewStoreWrapper() *Wrapper {
 // and emit store event
 func (s *Wrapper) StorePublishPacket(topics map[string]int32, packet *packets.Publish) (messageID string, err error) {
 	var (
-		encodedData = pool.ByteBufferPool.Get()
+		// there doesn't use bytes.BufferPool, because the store maybe async
+		encodedData = bytes.NewBuffer(nil)
 		topic       = packet.Topic
 	)
 	if len(topics) == 0 {
 		return "", errs.ErrStoreTopicsEmpty
 	}
-	defer pool.ByteBufferPool.Put(encodedData)
-
 	// publish packet encode to bytes
 	if err := broker.Encode(DefaultSerializerVersion, &packet2.PublishMessage{
 		PublishPacket: packet,
@@ -112,8 +111,28 @@ func readStoreWriteToWriter(ctx context.Context, topic string, id string, size i
 		zap.Bool("include", include),
 		zap.Int("got message size", len(message)))
 	for _, m := range message {
-		writer(&m)
+		if !m.Will {
+			writer(&m)
+		}
 	}
 	return nil
+}
 
+func ReadTopicWillMessage(ctx context.Context, topic, messageID string, writer func(message *packet2.PublishMessage)) error {
+	var (
+		// TODO: limit maybe not enough
+		message, err = DefaultMessageStore.ReadTopicMessagesByID(ctx, topic, messageID, 1, true)
+	)
+	if err != nil {
+		return err
+	}
+	logger.Logger.Debug("store help read publish message and write to channel",
+		zap.String("store", topic),
+		zap.Int("got message size", len(message)))
+	for _, m := range message {
+		if m.Will {
+			writer(&m)
+		}
+	}
+	return nil
 }

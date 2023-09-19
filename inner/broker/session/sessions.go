@@ -6,16 +6,16 @@ import (
 )
 
 type Sessions struct {
-	store *broker.SessionStoreWithTimeout
+	store *broker.KeyValueStoreWithTimeout
 }
 
-func NewSessions(store broker.SessionStore) *Sessions {
-	return &Sessions{store: broker.NewSessionStoreWithTimout(store, 3*time.Second)}
+func NewSessions(store broker.KeyValueStore) *Sessions {
+	return &Sessions{store: broker.NewKeyValueStoreWithTimout(store, 3*time.Second)}
 
 }
 
 func (s *Sessions) ReadSession(key string) (broker.Session, bool) {
-	_, ok, err := s.store.DefaultReadKey(clientKey(key).String())
+	_, ok, err := s.store.DefaultReadKey(broker.ClientKey(key).String())
 	if err != nil {
 		return nil, false
 	}

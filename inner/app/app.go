@@ -7,6 +7,7 @@ import (
 	"github.com/BAN1ce/skyTree/inner/api"
 	"github.com/BAN1ce/skyTree/inner/broker"
 	"github.com/BAN1ce/skyTree/inner/broker/session"
+	"github.com/BAN1ce/skyTree/inner/broker/state"
 	"github.com/BAN1ce/skyTree/inner/broker/store"
 	"github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/inner/facade"
@@ -48,7 +49,8 @@ func NewApp() *App {
 	//}
 	var (
 		clientManager  = broker.NewClientManager()
-		sessionManager = session.NewSessions(broker2.NewLocalSession())
+		kvStore        = broker2.NewLocalKeyValueStore()
+		sessionManager = session.NewSessions(kvStore)
 	)
 	var (
 		dbStore = store.NewLocalStore(nutsdb.Options{
@@ -67,6 +69,7 @@ func NewApp() *App {
 			brokerCore: broker.NewBroker(
 				broker.WithPublishRetry(publishRetrySchedule),
 				broker.WithStore(store.NewStoreWrapper()),
+				broker.WithState(state.NewState(kvStore)),
 				broker.WithSessionManager(sessionManager),
 				broker.WithClientManager(clientManager),
 				broker.WithSubCenter(broker2.NewLocalSubCenter()),

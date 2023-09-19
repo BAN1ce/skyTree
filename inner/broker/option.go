@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"github.com/BAN1ce/skyTree/inner/broker/state"
 	"github.com/BAN1ce/skyTree/inner/broker/store"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/pkg/broker"
@@ -24,6 +25,12 @@ func WithClientManager(manager *ClientManager) Option {
 func WithSubCenter(tree broker.SubCenter) Option {
 	return func(core *Broker) {
 		core.subTree = tree
+	}
+}
+
+func WithState(s *state.State) Option {
+	return func(core *Broker) {
+		core.state = s
 	}
 }
 
