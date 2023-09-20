@@ -99,6 +99,11 @@ func (s *Local) ReadTopicMessagesByID(ctx context.Context, topic, id string, lim
 	return messages, err
 }
 
+func (s *Local) DeleteTopicMessageID(ctx context.Context, topic, messageID string) error {
+	return s.db.Update(func(tx *nutsdb.Tx) error {
+		return tx.ZRem(topic, messageID)
+	})
+}
 func (s *Local) DeleteBeforeID(id string) {
 	// TODO implement me
 	panic("implement me")
@@ -114,6 +119,7 @@ func nutsDBValuesBeMessages(values []*zset.SortedSetNode, topic string) []packet
 			continue
 		} else {
 			if pubMessage.ExpiredTime == 0 || pubMessage.ExpiredTime > time.Now().Unix() {
+				pubMessage.MessageID = v.Key()
 				messages = append(messages, *pubMessage)
 			} else {
 				logger.Logger.Debug("read from Local decode message expired", zap.String("topic", topic), zap.String("messageID", pubMessage.MessageID))

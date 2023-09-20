@@ -8,6 +8,8 @@ import (
 	"github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
+	"github.com/BAN1ce/skyTree/pkg/errs"
+	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/eclipse/paho.golang/packets"
 	"go.uber.org/zap"
 )
@@ -15,6 +17,7 @@ import (
 type Topic interface {
 	Start(ctx context.Context)
 	Close() error
+	Publish(publish *packet.PublishMessage) error
 }
 type QoS1Handle interface {
 	HandlePublishAck(pubAck *packets.Puback)
@@ -167,4 +170,10 @@ func (t *Topics) Close() error {
 		t.DeleteTopic(topicName)
 	}
 	return nil
+}
+func (t *Topics) Publish(topic string, message *packet.PublishMessage) error {
+	if _, ok := t.topic[topic]; !ok {
+		return errs.ErrTopicNotExistsInSubTopics
+	}
+	return t.topic[topic].Publish(message)
 }

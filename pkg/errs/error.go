@@ -26,7 +26,8 @@ var (
 )
 
 var (
-	ErrInvalidQoS = errors.New("invalid qos")
+	ErrInvalidQoS                = errors.New("invalid qos")
+	ErrTopicNotExistsInSubTopics = errors.New("topic not exists in sub topics")
 )
 
 var (

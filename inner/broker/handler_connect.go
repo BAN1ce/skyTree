@@ -122,18 +122,21 @@ func (c *ConnectHandler) handleWillMessage(broker *Broker, connect *packets.Conn
 		return nil
 	}
 	var (
-		publishMessage = pool.PublishPool.Get()
+		publishPacket = pool.PublishPool.Get()
 	)
-	publishMessage.Topic = connect.WillTopic
-	publishMessage.Payload = connect.WillMessage
-	publishMessage.QoS = connect.WillQOS
+	publishPacket.Topic = connect.WillTopic
+	publishPacket.Payload = connect.WillMessage
+	publishPacket.QoS = connect.WillQOS
+	publishPacket.Retain = connect.WillRetain
+
 	// TODO: fill publish message properties and other fields
 	messageID, err := broker.store.StorePublishPacket(map[string]int32{
 		connect.WillTopic: int32(connect.WillQOS),
-	}, publishMessage)
+	}, publishPacket)
 	if err != nil {
 		return err
 	}
+
 	if err := broker.state.CreateTopicWillMessageID(connect.WillTopic, messageID, connect.WillRetain); err != nil {
 		return err
 	}

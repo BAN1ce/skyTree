@@ -17,26 +17,26 @@ func NewState(store broker.KeyValueStore) *State {
 
 func (s *State) CreateTopicWillMessageID(topic, messageID string, retain bool) error {
 	if retain {
-		return s.store.DefaultPutKey(broker.TopicWillMessageMessageIDKey(topic, messageID), "true")
+		return s.store.DefaultPutKey(broker.TopicWillMessageMessageIDKey(topic, messageID).String(), "true")
 	} else {
-		return s.store.DefaultPutKey(broker.TopicWillMessageMessageIDKey(topic, messageID), "false")
+		return s.store.DefaultPutKey(broker.TopicWillMessageMessageIDKey(topic, messageID).String(), "false")
 	}
 }
 
 func (s *State) ReadTopicWillMessageID(topic string) ([]string, error) {
 	var (
 		id         []string
-		value, err = s.store.DefaultReadPrefixKey(broker.TopicWillMessage(topic))
+		value, err = s.store.DefaultReadPrefixKey(broker.TopicWillMessage(topic).String())
 	)
 	if err != nil {
 		return id, err
 	}
 	for k := range value {
-		id = append(id, k)
+		id = append(id, broker.TrimTopicWillMessageIDKey(topic, k))
 	}
 	return id, err
 }
 
 func (s *State) DeleteTopicWillMessageID(topic, messageID string) error {
-	return s.store.DefaultDeleteKey(broker.TopicWillMessageMessageIDKey(topic, messageID))
+	return s.store.DefaultDeleteKey(broker.TopicWillMessageMessageIDKey(topic, messageID).String())
 }

@@ -1,6 +1,10 @@
 package broker
 
-import "strings"
+import (
+	"github.com/BAN1ce/skyTree/logger"
+	"go.uber.org/zap"
+	"strings"
+)
 
 const (
 	KeyTopicPrefix      = "topic/"
@@ -13,16 +17,23 @@ func TopicKey(topic string) *strings.Builder {
 	build.WriteString(topic)
 	return &build
 }
-func TopicWillMessage(topic string) string {
+func TopicWillMessage(topic string) *strings.Builder {
 	var build = TopicKey(topic)
 	build.WriteString(KeyTopicWillMessage)
-	return build.String()
+	return build
 }
 
-func TopicWillMessageMessageIDKey(topic, messageID string) string {
-	var build = TopicKey(topic)
-	build.WriteString(KeyTopicWillMessage)
+func TopicWillMessageMessageIDKey(topic, messageID string) *strings.Builder {
+	var build = TopicWillMessage(topic)
 	build.WriteString("/")
 	build.WriteString(messageID)
-	return build.String()
+	logger.Logger.Debug("TopicWillMessageMessageIDKey", zap.String("build", build.String()))
+	return build
+}
+
+func TrimTopicWillMessageIDKey(topic, key string) string {
+	var build = TopicWillMessage(topic)
+	build.WriteString("/")
+	logger.Logger.Debug("TrimTopicWillMessageIDKey", zap.String("key", key), zap.String("build", build.String()))
+	return strings.TrimPrefix(key, build.String())
 }

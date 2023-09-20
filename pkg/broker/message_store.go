@@ -32,6 +32,7 @@ type TopicMessageStore interface {
 	ReadFromTimestamp(ctx context.Context, topic string, timestamp time.Time, limit int) ([]packet.PublishMessage, error)
 	ReadTopicMessagesByID(ctx context.Context, topic, id string, limit int, include bool) ([]packet.PublishMessage, error)
 	CreatePacket(topic string, value []byte) (id string, err error)
+	DeleteTopicMessageID(ctx context.Context, topic, messageID string) error
 }
 
 // Encode publish packet to bytes

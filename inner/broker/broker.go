@@ -197,10 +197,42 @@ func (b *Broker) NotifyWillMessage(message *broker.WillMessage) {
 		logger.Logger.Error("read will message error", zap.Error(err))
 		return
 	}
+	logger.Logger.Debug("read will message", zap.String("topic", message.Topic),
+		zap.String("messageID", message.MessageID), zap.String("publishMessageID", willPublishMessage.MessageID))
+
+	// check will message expired, if expired, delete will message from store and return
+	// delete will message from store if retain is false
+	if !message.Retain {
+		if err := store.DeleteTopicMessageID(context.TODO(), message.Topic, message.MessageID); err != nil {
+			logger.Logger.Error("delete will message error", zap.Error(err), zap.String("topic", message.Topic), zap.String("messageID", message.MessageID))
+		}
+		logger.Logger.Debug("delete will message", zap.String("topic", message.Topic), zap.String("messageID", message.MessageID))
+	}
 	clients := b.subTree.Match(message.Topic)
 	pubMessage := message.ToPublishPacket()
 	pubMessage.Payload = willPublishMessage.PublishPacket.Payload
 	for id := range clients {
 		b.clientManager.Write(id, pubMessage)
 	}
+}
+
+func (b *Broker) ReadTopicRetainWillMessage(topic string) []*packet2.PublishMessage {
+	var (
+		willPublishMessage []*packet2.PublishMessage
+		messageID, err     = b.state.ReadTopicWillMessageID(topic)
+		ctx, cancel        = context.WithCancel(b.ctx)
+	)
+	cancel()
+	if err != nil {
+		logger.Logger.Error("read will message error", zap.Error(err), zap.String("topic", topic))
+		return nil
+	}
+	for _, id := range messageID {
+		if err := store.ReadPublishMessage(ctx, topic, id, 1, true, func(message *packet2.PublishMessage) {
+			willPublishMessage = append(willPublishMessage, message)
+		}); err != nil {
+			logger.Logger.Error("read will message error", zap.Error(err), zap.String("topic", topic), zap.String("messageID", id))
+		}
+	}
+	return willPublishMessage
 }

@@ -72,7 +72,7 @@ func (q *QoS1) readSessionUnFinishMessage() {
 		}
 		for _, m := range publishMessage {
 			m.FromSession = true
-			q.publishChan <- &m
+			q.writeToPublishChan(&m)
 		}
 	}
 }
@@ -107,14 +107,8 @@ func (q *QoS1) listenPublishChan() {
 }
 
 func (q *QoS1) writeToPublishChan(message *packet.PublishMessage) {
-	if q.ctx.Err() != nil {
-		return
-	}
-	select {
-	case q.publishChan <- message:
-	case <-q.ctx.Done():
-		close(q.publishChan)
-		return
+	if err := q.Publish(message); err != nil {
+		logger.Logger.Warn("QoS1: write to publishChan error = ", zap.Error(err), zap.String("store", q.meta.topic))
 	}
 }
 
@@ -131,5 +125,13 @@ func (q *QoS1) Close() error {
 func (q *QoS1) afterClose() error {
 	q.session.CreateTopicUnFinishedMessage(q.meta.topic, q.publishQueue.getUnFinishedMessageID())
 	q.session.SetTopicLatestPushedMessageID(q.meta.topic, q.meta.latestMessageID)
+	return nil
+}
+
+func (q *QoS1) Publish(publish *packet.PublishMessage) error {
+	if q.ctx.Err() != nil {
+		return q.ctx.Err()
+	}
+	q.publishChan <- publish
 	return nil
 }

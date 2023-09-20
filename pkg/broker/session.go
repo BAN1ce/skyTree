@@ -80,6 +80,7 @@ type WillMessage struct {
 	Topic     string         `json:"topic"`
 	QoS       int            `json:"qos"`
 	Property  WillProperties `json:"property"`
+	Retain    bool           `json:"retain"`
 }
 
 func (w *WillMessage) ToPublishPacket() *packets.Publish {
@@ -94,6 +95,7 @@ func ConnectPacketToWillMessage(connect *packets.Connect, messageID string) *Wil
 		MessageID: messageID,
 		Topic:     connect.WillTopic,
 		QoS:       int(connect.WillQOS),
+		Retain:    connect.WillRetain,
 		Property: WillProperties{
 			WillDelayInterval: int64(*connect.WillProperties.WillDelayInterval),
 			PayloadFormat:     int64(*connect.WillProperties.PayloadFormat),

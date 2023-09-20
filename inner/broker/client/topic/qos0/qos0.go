@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
+	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/eclipse/paho.golang/packets"
 	"go.uber.org/zap"
@@ -78,4 +79,9 @@ func (t *QoS0) Close() error {
 // It will delete the publish event listener.
 func (t *QoS0) afterClose() {
 	t.publishListener.DeletePublishEvent(t.topic, t.handler)
+}
+
+func (t *QoS0) Publish(publish *packet.PublishMessage) error {
+	t.handler(t.topic, publish.PublishPacket)
+	return nil
 }

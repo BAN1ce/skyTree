@@ -41,6 +41,7 @@ func (s *Wrapper) StorePublishPacket(topics map[string]int32, packet *packets.Pu
 	}, encodedData); err != nil {
 		return "", err
 	}
+
 	for topic = range topics {
 		// store message bytes
 		messageID, err = DefaultMessageStore.CreatePacket(topic, encodedData.Bytes())
@@ -135,4 +136,8 @@ func ReadTopicWillMessage(ctx context.Context, topic, messageID string, writer f
 		}
 	}
 	return nil
+}
+
+func DeleteTopicMessageID(ctx context.Context, topic, messageID string) error {
+	return DefaultMessageStore.DeleteTopicMessageID(ctx, topic, messageID)
 }

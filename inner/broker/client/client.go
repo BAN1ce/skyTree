@@ -6,6 +6,7 @@ import (
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/BAN1ce/skyTree/pkg/broker"
+	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/BAN1ce/skyTree/pkg/state"
 	"github.com/BAN1ce/skyTree/pkg/util"
@@ -279,4 +280,8 @@ func (c *Client) GetTopicAlias(u uint16) string {
 	c.mux.RLock()
 	defer c.mux.RUnlock()
 	return c.topicAlias[u]
+}
+
+func (c *Client) Publish(topic string, message *packet.PublishMessage) error {
+	return c.topics.Publish(topic, message)
 }

@@ -87,13 +87,8 @@ func (q *QoS2) listenPublishChan() {
 
 // writeToPublishChan is not concurrent safe,it must be called in a single goroutine
 func (q *QoS2) writeToPublishChan(message *packet.PublishMessage) {
-	if q.ctx.Err() != nil {
-		return
-	}
-	select {
-	case q.publishChan <- message:
-	case <-q.ctx.Done():
-		close(q.publishChan)
+	if err := q.Publish(message); err != nil {
+		logger.Logger.Warn("write to publishChan error", zap.Error(err), zap.String("topic", q.meta.topic))
 	}
 }
 
@@ -102,11 +97,11 @@ func (q *QoS2) readSessionUnFinishMessage() {
 		if msg.PubReceived {
 			pubRelPacket := packet.NewPublishRel()
 			pubRelPacket.PacketID = util.StringToPacketID(msg.PacketID)
-			q.publishChan <- &packet.PublishMessage{
+			q.writeToPublishChan(&packet.PublishMessage{
 				PubRelPacket: pubRelPacket,
 				PubReceived:  true,
 				FromSession:  true,
-			}
+			})
 			continue
 		}
 		ctx, cancel := context.WithTimeout(context.TODO(), 3*time.Second)
@@ -118,7 +113,7 @@ func (q *QoS2) readSessionUnFinishMessage() {
 		}
 		for _, m := range publishMessage {
 			m.FromSession = true
-			q.publishChan <- &m
+			q.writeToPublishChan(&m)
 		}
 	}
 }
@@ -142,5 +137,13 @@ func (q *QoS2) HandelPublishComp(pubcomp *packets.Pubcomp) {
 func (q *QoS2) afterClose() error {
 	q.session.SetTopicLatestPushedMessageID(q.meta.topic, q.meta.latestMessageID)
 	q.session.CreateTopicUnFinishedMessage(q.meta.topic, q.queue.getUnFinishPacket())
+	return nil
+}
+
+func (q *QoS2) Publish(publish *packet.PublishMessage) error {
+	if q.ctx.Err() != nil {
+		return q.ctx.Err()
+	}
+	q.publishChan <- publish
 	return nil
 }
