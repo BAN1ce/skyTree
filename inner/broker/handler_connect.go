@@ -94,8 +94,7 @@ func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client
 		clientID = uuid.New().String()
 	}
 	if cleanStart {
-		// TODO: if clean need delete will message and delay job
-		broker.sessionManager.DeleteSession(clientID)
+		broker.ReleaseSession(clientID)
 		session = broker.sessionManager.NewSession(clientID)
 		broker.sessionManager.CreateSession(clientID, session)
 	} else {
@@ -104,6 +103,7 @@ func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client
 			session = broker.sessionManager.NewSession(clientID)
 			broker.sessionManager.CreateSession(clientID, session)
 		} else {
+			broker.ReleaseWillMessage(session)
 			// use old client.proto
 			connack.SessionPresent = true
 		}

@@ -17,6 +17,7 @@ func TopicKey(topic string) *strings.Builder {
 	build.WriteString(topic)
 	return &build
 }
+
 func TopicWillMessage(topic string) *strings.Builder {
 	var build = TopicKey(topic)
 	build.WriteString(KeyTopicWillMessage)

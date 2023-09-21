@@ -8,7 +8,8 @@ import (
 func NewSchedule(ctx context.Context, options ...Option) *DelayTaskSchedule {
 	return NewDelayTaskSchedule(ctx, func(key string, data interface{}) {
 		if t, ok := data.(*Task); ok {
-			if t.times <= t.MaxTimes && t.usedTime <= t.MaxTime {
+			if t.times <= t.MaxTimes && (t.usedTime <= t.MaxTime || t.MaxTime == 0) {
+
 				if t.Job == nil {
 					return
 				}

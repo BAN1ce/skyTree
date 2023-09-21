@@ -236,3 +236,42 @@ func (b *Broker) ReadTopicRetainWillMessage(topic string) []*packet2.PublishMess
 	}
 	return willPublishMessage
 }
+
+func (b *Broker) ReleaseSession(clientID string) {
+	var (
+		session, ok = b.sessionManager.ReadSession(clientID)
+	)
+	if !ok {
+		return
+	}
+	b.ReleaseWillMessage(session)
+	session.Release()
+}
+
+func (b *Broker) ReleaseWillMessage(session broker.Session) {
+	willMessage, err := session.GetWillMessage()
+	if err != nil {
+		logger.Logger.Error("release session get will message error", zap.Error(err))
+		return
+	}
+
+	if willMessage.Property.WillDelayInterval != 0 {
+		// delete will message delay task
+		facade.GetWillDelay().Delete(willMessage.DelayTaskID)
+		logger.Logger.Debug("release session delete will message delay task", zap.String("delayTaskID", willMessage.DelayTaskID))
+	}
+	if willMessage.Retain {
+		// delete will message from message store
+		if err := store.DeleteTopicMessageID(context.TODO(), willMessage.Topic, willMessage.MessageID); err != nil {
+			logger.Logger.Error("release session delete will message from message store error", zap.Error(err))
+		}
+		logger.Logger.Debug("release session delete will message from message store", zap.String("topic", willMessage.Topic), zap.String("messageID", willMessage.MessageID))
+	}
+
+	// delete will message ID from state
+	if err := b.state.DeleteTopicWillMessageID(willMessage.Topic, willMessage.MessageID); err != nil {
+		logger.Logger.Error("release session delete will message from state error", zap.Error(err))
+	}
+	logger.Logger.Debug("release session delete will message from state", zap.String("topic", willMessage.Topic), zap.String("messageID", willMessage.MessageID))
+
+}

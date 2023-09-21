@@ -1,6 +1,9 @@
 package broker
 
-import "github.com/eclipse/paho.golang/packets"
+import (
+	"github.com/eclipse/paho.golang/packets"
+	"github.com/google/uuid"
+)
 
 type SessionKey string
 
@@ -75,12 +78,14 @@ type WillProperties struct {
 	CorrelationData   []byte           `json:"correlation_data"`
 	UserProperties    []UserProperties `json:"user_properties"`
 }
+
 type WillMessage struct {
-	MessageID string
-	Topic     string         `json:"topic"`
-	QoS       int            `json:"qos"`
-	Property  WillProperties `json:"property"`
-	Retain    bool           `json:"retain"`
+	MessageID   string
+	DelayTaskID string
+	Topic       string         `json:"topic"`
+	QoS         int            `json:"qos"`
+	Property    WillProperties `json:"property"`
+	Retain      bool           `json:"retain"`
 }
 
 func (w *WillMessage) ToPublishPacket() *packets.Publish {
@@ -92,10 +97,11 @@ func (w *WillMessage) ToPublishPacket() *packets.Publish {
 
 func ConnectPacketToWillMessage(connect *packets.Connect, messageID string) *WillMessage {
 	return &WillMessage{
-		MessageID: messageID,
-		Topic:     connect.WillTopic,
-		QoS:       int(connect.WillQOS),
-		Retain:    connect.WillRetain,
+		MessageID:   messageID,
+		DelayTaskID: uuid.NewString(),
+		Topic:       connect.WillTopic,
+		QoS:         int(connect.WillQOS),
+		Retain:      connect.WillRetain,
 		Property: WillProperties{
 			WillDelayInterval: int64(*connect.WillProperties.WillDelayInterval),
 			PayloadFormat:     int64(*connect.WillProperties.PayloadFormat),

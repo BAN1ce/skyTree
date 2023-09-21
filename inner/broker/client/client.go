@@ -3,11 +3,13 @@ package client
 import (
 	"context"
 	"github.com/BAN1ce/skyTree/inner/broker/client/topic"
+	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/pool"
+	"github.com/BAN1ce/skyTree/pkg/retry"
 	"github.com/BAN1ce/skyTree/pkg/state"
 	"github.com/BAN1ce/skyTree/pkg/util"
 	"github.com/eclipse/paho.golang/packets"
@@ -166,6 +168,23 @@ func (c *Client) afterClose() {
 		} else {
 			if willMessage.Property.WillDelayInterval == 0 {
 				c.options.notifyClose.NotifyWillMessage(willMessage)
+			} else {
+				// TODO: create a delay task to publish will message and store delay task ID to session
+				if err := facade.GetWillDelay().Create(&retry.Task{
+					MaxTimes:     1,
+					MaxTime:      0,
+					IntervalTime: time.Duration(willMessage.Property.WillDelayInterval) * time.Second,
+					Key:          willMessage.DelayTaskID,
+					Data:         willMessage,
+					Job: func(task *retry.Task) {
+						if m, ok := task.Data.(*broker.WillMessage); ok {
+							c.options.notifyClose.NotifyWillMessage(m)
+						}
+					},
+					TimeoutJob: nil,
+				}); err != nil {
+					logger.Logger.Error("create will delay task error", zap.Error(err), zap.String("client", c.MetaString()))
+				}
 			}
 		}
 	}
