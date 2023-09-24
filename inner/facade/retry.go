@@ -45,6 +45,7 @@ func DeletePublishRetryKey(key string) {
 func SinglePubRelRetry(ctx context.Context, option ...retry.Option) RetrySchedule {
 	OncePubRelRetry.Do(func() {
 		var s = retry.NewSchedule(ctx, option...)
+		s.Start()
 		pubRelRetry = s
 	})
 	return pubRelRetry

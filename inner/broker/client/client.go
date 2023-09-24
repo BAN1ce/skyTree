@@ -2,11 +2,13 @@ package client
 
 import (
 	"context"
+	"errors"
 	"github.com/BAN1ce/skyTree/inner/broker/client/topic"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/BAN1ce/skyTree/pkg/broker"
+	"github.com/BAN1ce/skyTree/pkg/errs"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/BAN1ce/skyTree/pkg/retry"
@@ -155,6 +157,10 @@ func (c *Client) Close() error {
 
 func (c *Client) afterClose() {
 	logger.Logger.Info("client close", zap.String("clientID", c.ID))
+	defer func() {
+		c.options.notifyClose.NotifyClientClose(c)
+	}()
+
 	if err := c.conn.Close(); err != nil {
 		logger.Logger.Info("close conn error", zap.Error(err), zap.String("client", c.MetaString()))
 	}
@@ -162,33 +168,44 @@ func (c *Client) afterClose() {
 		logger.Logger.Warn("close topics error", zap.Error(err), zap.String("client", c.MetaString()))
 	}
 	if c.options.session != nil {
-		// TODO: check will message, if will message is not nil, publish will message or create a delay task to publish will message
-		if willMessage, err := c.options.session.GetWillMessage(); err != nil {
-			logger.Logger.Error("get will message error", zap.Error(err), zap.String("client", c.MetaString()))
-		} else {
-			if willMessage.Property.WillDelayInterval == 0 {
-				c.options.notifyClose.NotifyWillMessage(willMessage)
-			} else {
-				// TODO: create a delay task to publish will message and store delay task ID to session
-				if err := facade.GetWillDelay().Create(&retry.Task{
-					MaxTimes:     1,
-					MaxTime:      0,
-					IntervalTime: time.Duration(willMessage.Property.WillDelayInterval) * time.Second,
-					Key:          willMessage.DelayTaskID,
-					Data:         willMessage,
-					Job: func(task *retry.Task) {
-						if m, ok := task.Data.(*broker.WillMessage); ok {
-							c.options.notifyClose.NotifyWillMessage(m)
-						}
-					},
-					TimeoutJob: nil,
-				}); err != nil {
-					logger.Logger.Error("create will delay task error", zap.Error(err), zap.String("client", c.MetaString()))
-				}
+		willMessage, err := c.options.session.GetWillMessage()
+		if err != nil {
+			if !errors.Is(err, errs.ErrSessionWillMessageNotFound) {
+				logger.Logger.Error("get will message error", zap.Error(err), zap.String("client", c.MetaString()))
 			}
+			return
 		}
+
+		if willMessage.Property.WillDelayInterval == 0 {
+			c.options.notifyClose.NotifyWillMessage(willMessage)
+			return
+		}
+
+		// create a delay task to publish will message
+		if err := facade.GetWillDelay().Create(&retry.Task{
+			MaxTimes:     1,
+			MaxTime:      0,
+			IntervalTime: time.Duration(willMessage.Property.WillDelayInterval) * time.Second,
+			Key:          willMessage.DelayTaskID,
+			Data:         willMessage,
+			Job: func(task *retry.Task) {
+				if m, ok := task.Data.(*broker.WillMessage); ok {
+					logger.Logger.Debug("will message delay task", zap.String("client", c.MetaString()), zap.String("delayTaskID", task.Key))
+					c.options.notifyClose.NotifyWillMessage(m)
+				} else {
+					logger.Logger.Error("will message type error", zap.String("client", c.MetaString()))
+				}
+			},
+			TimeoutJob: nil,
+		}); err != nil {
+			logger.Logger.Error("create will delay task error", zap.Error(err), zap.String("client", c.MetaString()))
+			return
+		}
+		logger.Logger.Debug("create will delay task success", zap.String("client", c.MetaString()),
+			zap.Int64("delay time", willMessage.Property.WillDelayInterval), zap.String("delayTaskID", willMessage.DelayTaskID))
+
 	}
-	c.options.notifyClose.NotifyClientClose(c)
+
 }
 
 func (c *Client) SetID(id string) {

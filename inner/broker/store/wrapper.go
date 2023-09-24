@@ -8,9 +8,7 @@ import (
 	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/errs"
 	packet2 "github.com/BAN1ce/skyTree/pkg/packet"
-	"github.com/eclipse/paho.golang/packets"
 	"go.uber.org/zap"
-	"time"
 )
 
 // Wrapper is a wrapper of pkg.Store
@@ -25,24 +23,20 @@ func NewStoreWrapper() *Wrapper {
 // if topics is empty, return error
 // topics include the origin topic and the topic of the wildcard subscription
 // and emit store event
-func (s *Wrapper) StorePublishPacket(topics map[string]int32, packet *packets.Publish) (messageID string, err error) {
+func (s *Wrapper) StorePublishPacket(topics map[string]int32, packet *packet2.PublishMessage) (messageID string, err error) {
 	var (
 		// there doesn't use bytes.BufferPool, because the store maybe async
 		encodedData = bytes.NewBuffer(nil)
-		topic       = packet.Topic
 	)
 	if len(topics) == 0 {
 		return "", errs.ErrStoreTopicsEmpty
 	}
 	// publish packet encode to bytes
-	if err := broker.Encode(DefaultSerializerVersion, &packet2.PublishMessage{
-		PublishPacket: packet,
-		TimeStamp:     time.Now().Unix(),
-	}, encodedData); err != nil {
+	if err := broker.Encode(DefaultSerializerVersion, packet, encodedData); err != nil {
 		return "", err
 	}
 
-	for topic = range topics {
+	for topic := range topics {
 		// store message bytes
 		messageID, err = DefaultMessageStore.CreatePacket(topic, encodedData.Bytes())
 		if err != nil {
@@ -90,6 +84,9 @@ func ReadPublishMessage(ctx context.Context, topic, startMessageID string, size 
 			logger.Logger.Error("readStoreWriteToWriter error", zap.Error(err))
 		}
 		cancel()
+	}
+	if ctx1.Err() != nil {
+		return
 	}
 	DefaultMessageStoreEvent.CreateListenMessageStoreEvent(topic, f)
 	<-ctx1.Done()

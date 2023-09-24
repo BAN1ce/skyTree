@@ -91,9 +91,12 @@ func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client
 		connack.ReasonCode = packets.ConnackInvalidClientID
 		return errs.ErrConnackInvalidClientID
 	} else if clientID == "" {
+		// TODO: generate clientID and confirm protocol
 		clientID = uuid.New().String()
 	}
+
 	if cleanStart {
+		//  release old session
 		broker.ReleaseSession(clientID)
 		session = broker.sessionManager.NewSession(clientID)
 		broker.sessionManager.CreateSession(clientID, session)
@@ -132,12 +135,17 @@ func (c *ConnectHandler) handleWillMessage(broker *Broker, connect *packets.Conn
 	// TODO: fill publish message properties and other fields
 	messageID, err := broker.store.StorePublishPacket(map[string]int32{
 		connect.WillTopic: int32(connect.WillQOS),
-	}, publishPacket)
+	}, &packet2.PublishMessage{
+		MessageID:     "",
+		PublishPacket: publishPacket,
+		TimeStamp:     time.Now().Unix(),
+		Will:          true,
+	})
 	if err != nil {
 		return err
 	}
 
-	if err := broker.state.CreateTopicWillMessageID(connect.WillTopic, messageID, connect.WillRetain); err != nil {
+	if err := broker.state.CreateTopicWillMessageID(connect.WillTopic, messageID, connect.ClientID); err != nil {
 		return err
 	}
 	return session.SetWillMessage(broker2.ConnectPacketToWillMessage(connect, messageID))

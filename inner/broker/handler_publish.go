@@ -82,7 +82,7 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 			return
 		}
 		// store message
-		if _, err = broker.store.StorePublishPacket(subTopics, packet); err != nil {
+		if _, err = broker.store.StorePublishPacket(subTopics, &packet2.PublishMessage{PublishPacket: packet}); err != nil {
 			logger.Logger.Error("store publish packet error", zap.Error(err), zap.String("store", topic))
 			pubAck.ReasonCode = packets.PubackUnspecifiedError
 		} else {

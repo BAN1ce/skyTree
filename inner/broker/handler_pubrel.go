@@ -26,7 +26,7 @@ func (p *PublishRel) Handle(broker *Broker, client *client.Client, rawPacket *pa
 		publishRel.ReasonCode = packets.PubackUnspecifiedError
 	} else {
 		subTopics := broker.subTree.MatchTopic(publishPacket.Topic)
-		_, err = broker.store.StorePublishPacket(subTopics, publishPacket)
+		_, err = broker.store.StorePublishPacket(subTopics, &packet2.PublishMessage{PublishPacket: publishPacket})
 	}
 	if err != nil {
 		logger.Logger.Error("store publish packet error", zap.Error(err))

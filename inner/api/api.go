@@ -79,7 +79,8 @@ func (a *API) route() {
 
 func (a *API) storeAPI() {
 	ctr := store.NewController(a.store)
-	a.apiV1.GET("/store", ctr.Get)
+	a.apiV1.GET("/store/message", ctr.Get)
+	a.apiV1.GET("/store/message/:id", ctr.Info)
 }
 func (a *API) sessionAPI() {
 	ctr := session.NewController(a.sessionManager)

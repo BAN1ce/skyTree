@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package packet;
+option go_package = "./;packet";
+
+message StorePublishMessage  {
+  string MessageID = 1;
+  bytes PublishPacket = 2;
+  bytes PubRelPacket = 3;
+  bool PubReceived = 4;
+  bool FromSession = 5;
+  int64 TimeStamp = 6;
+  int64  ExpiredTime = 7;
+  bool Will = 8;
+}

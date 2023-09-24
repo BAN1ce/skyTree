@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/labstack/echo/v4"
 	"time"
@@ -48,4 +49,30 @@ func (c *Controller) Get(ctx echo.Context) error {
 	//	},
 	//	Data: messageID,
 	//}))
+}
+
+func (c *Controller) Info(ctx echo.Context) error {
+	var (
+		messageID        = ctx.Param("id")
+		topic            = ctx.QueryParam("topic")
+		ctxInner, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	)
+	defer cancel()
+	if message, err := c.TopicMessageStore.ReadTopicMessagesByID(ctxInner, topic, messageID, 1, true); err != nil {
+		return err
+	} else {
+		if len(message) == 0 {
+			return errors.New("no message")
+		}
+		msg := message[0]
+		return ctx.JSON(200, newInfoResponse(InfoData{
+			MessageID:   messageID,
+			Payload:     msg.PublishPacket.Payload,
+			PubReceived: msg.PubReceived,
+			FromSession: msg.FromSession,
+			TimeStamp:   msg.TimeStamp,
+			ExpiredTime: msg.ExpiredTime,
+			Will:        msg.Will,
+		}))
+	}
 }
