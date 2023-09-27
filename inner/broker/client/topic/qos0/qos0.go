@@ -78,7 +78,8 @@ func (t *QoS0) handler(i ...interface{}) {
 		if !ok {
 			logger.Logger.Error("ListenTopicPublishEvent: type error")
 		}
-		if p.PublishPacket == nil {
+		if p == nil || p.PublishPacket == nil {
+			logger.Logger.Error("ListenTopicPublishEvent: publish packet is nil")
 			return
 		}
 		if t.subOption.NoLocal && p.ClientID == t.writer.GetID() {
@@ -121,6 +122,6 @@ func (t *QoS0) Publish(publish *packet.PublishMessage) error {
 			return nil
 		}
 	}
-	t.handler(t.topic, publish.PublishPacket)
+	t.handler(t.topic, publish)
 	return nil
 }

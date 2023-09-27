@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	KeyTopicPrefix      = "topic/"
-	KeyTopicWillMessage = `/will_message`
+	KeyTopicPrefix        = "topic/"
+	KeyTopicWillMessage   = `/will_message`
+	KeyTopicRetainMessage = `/retain_message`
 )
 
 func TopicKey(topic string) *strings.Builder {
@@ -37,4 +38,17 @@ func TrimTopicWillMessageIDKey(topic, key string) string {
 	build.WriteString("/")
 	logger.Logger.Debug("TrimTopicWillMessageIDKey", zap.String("key", key), zap.String("build", build.String()))
 	return strings.TrimPrefix(key, build.String())
+}
+
+func TopicRetainMessage(topic string) *strings.Builder {
+	var build = TopicKey(topic)
+	build.WriteString(KeyTopicRetainMessage)
+	return build
+}
+
+func TopicRetainMessageMessageIDKey(topic, messageID string) *strings.Builder {
+	var build = TopicRetainMessage(topic)
+	build.WriteString("/")
+	build.WriteString(messageID)
+	return build
 }

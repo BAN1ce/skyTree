@@ -36,3 +36,25 @@ func (s *State) ReadTopicWillMessageID(topic string) (map[string]string, error) 
 func (s *State) DeleteTopicWillMessageID(topic, messageID string) error {
 	return s.store.DefaultDeleteKey(broker.TopicWillMessageMessageIDKey(topic, messageID).String())
 }
+
+func (s *State) ReadRetainMessageID(topic string) ([]string, error) {
+	var (
+		messageIDs []string
+		value, err = s.store.DefaultReadPrefixKey(broker.TopicRetainMessage(topic).String())
+	)
+	if err != nil {
+		return messageIDs, err
+	}
+	for _, v := range value {
+		messageIDs = append(messageIDs, v)
+	}
+	return messageIDs, err
+}
+
+func (s *State) CreateRetainMessageID(topic, messageID string) error {
+	return s.store.DefaultPutKey(broker.TopicRetainMessage(topic).String(), messageID)
+}
+
+func (s *State) DeleteRetainMessageID(topic string) error {
+	return s.store.DefaultDeleteKey(broker.TopicRetainMessage(topic).String())
+}

@@ -41,10 +41,11 @@ func (p *PublishHandler) handleTopicAlias(packet *packets.Publish, client *clien
 
 func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket *packets.ControlPacket) {
 	var (
-		packet = rawPacket.Content.(*packets.Publish)
-		qos    = packet.QoS
-		pubAck = packet2.NewPublishAck()
-		err    error
+		packet    = rawPacket.Content.(*packets.Publish)
+		qos       = packet.QoS
+		pubAck    = packet2.NewPublishAck()
+		err       error
+		messageID string
 	)
 	pubAck.PacketID = packet.PacketID
 	// handle topic alias, if topic alias is not 0, then use topic alias
@@ -58,51 +59,79 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 	var (
 		topic          = packet.Topic
 		subTopics      = broker.subTree.MatchTopic(topic)
-		publishMessgae = &packet2.PublishMessage{
+		publishMessage = &packet2.PublishMessage{
 			ClientID:      client.GetID(),
 			PublishPacket: packet,
 		}
 	)
+	defer func() {
+		broker.writePacket(client, pubAck)
+	}()
+
 	// double check topic name
 	if topic == "" {
 		pubAck.ReasonCode = packets.PubackTopicNameInvalid
-		broker.writePacket(client, pubAck)
 		return
 	}
 
+	if len(packet.Payload) == 0 {
+		if packet.Retain {
+			if err = broker.state.DeleteRetainMessageID(topic); err != nil {
+				pubAck.ReasonCode = packets.PubackUnspecifiedError
+				return
+			}
+		} else {
+			pubAck.ReasonCode = packets.PubackUnspecifiedError
+			return
+		}
+	}
+
+	defer func() {
+		if packet.Retain && messageID != "" {
+			if err = broker.state.CreateRetainMessageID(packet.Topic, messageID); err != nil {
+				pubAck.ReasonCode = packets.PubackUnspecifiedError
+				return
+			}
+		}
+	}()
+
 	// TODO: should emit all wildcard store
 	// TODO: should emit all wildcard store
-	event.GlobalEvent.EmitClientPublish(topic, publishMessgae)
+	event.GlobalEvent.EmitClientPublish(topic, publishMessage)
 
 	switch qos {
 	case broker2.QoS0:
-		return
-
-	case broker2.QoS1:
-		if len(subTopics) == 0 {
-			pubAck.ReasonCode = packets.PubackNoMatchingSubscribers
-			broker.writePacket(client, pubAck)
+		if !packet.Retain {
 			return
 		}
+
+	case broker2.QoS1:
+
+		if len(subTopics) == 0 && !packet.Retain {
+			pubAck.ReasonCode = packets.PubackNoMatchingSubscribers
+			return
+		}
+		if len(subTopics) == 0 {
+			subTopics = map[string]int32{
+				topic: int32(packet.QoS),
+			}
+		}
 		// store message
-		if _, err = broker.store.StorePublishPacket(subTopics, publishMessgae); err != nil {
+		if messageID, err = broker.store.StorePublishPacket(subTopics, publishMessage); err != nil {
 			logger.Logger.Error("store publish packet error", zap.Error(err), zap.String("store", topic))
 			pubAck.ReasonCode = packets.PubackUnspecifiedError
 		} else {
 			pubAck.ReasonCode = packets.PubackSuccess
 		}
-		client.WritePacket(pubAck)
 
 	case broker2.QoS2:
 		pubrec := packet2.NewPublishRec()
 		if len(subTopics) == 0 {
 			pubrec.ReasonCode = packets.PubrecNoMatchingSubscribers
-			broker.writePacket(client, pubrec)
 			return
 		}
 		if client.QoS2.HandlePublish(packet) {
 			pubrec.PacketID = packet.PacketID
-			broker.writePacket(client, pubrec)
 			return
 		}
 		logger.Logger.Info("client qos2 handle publish again", zap.String("client", client.MetaString()), zap.String("store", topic),
@@ -111,7 +140,7 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 
 	default:
 		pubAck.ReasonCode = packets.PubackUnspecifiedError
-		client.WritePacket(pubAck)
 		return
 	}
+
 }

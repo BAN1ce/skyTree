@@ -244,6 +244,27 @@ func (b *Broker) ReadTopicRetainWillMessage(topic string) []*packet2.PublishMess
 	return willPublishMessage
 }
 
+func (b *Broker) ReadTopicRetainMessage(topic string) []*packet2.PublishMessage {
+	var (
+		retainMessage  []*packet2.PublishMessage
+		messageID, err = b.state.ReadRetainMessageID(topic)
+		ctx, cancel    = context.WithCancel(b.ctx)
+	)
+	cancel()
+	if err != nil {
+		logger.Logger.Error("read retain message error", zap.Error(err), zap.String("topic", topic))
+		return nil
+	}
+	for _, id := range messageID {
+		if err := store.ReadPublishMessage(ctx, topic, id, 1, true, func(message *packet2.PublishMessage) {
+			retainMessage = append(retainMessage, message)
+		}); err != nil {
+			logger.Logger.Error("read retain message error", zap.Error(err), zap.String("topic", topic), zap.String("messageID", id))
+		}
+	}
+	return retainMessage
+
+}
 func (b *Broker) ReleaseSession(clientID string) {
 	var (
 		session, ok = b.sessionManager.ReadSession(clientID)

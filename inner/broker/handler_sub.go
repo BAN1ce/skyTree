@@ -33,15 +33,22 @@ func (s *SubHandler) Handle(broker *Broker, client *client.Client, rawPacket *pa
 	result := client.HandleSub(packet)
 	for _, topic := range packet.Subscriptions {
 		subAck.Reasons = append(subAck.Reasons, result[topic.Topic])
-		// sub success, publish retain will message
-		if result[topic.Topic] == 0x00 {
-			for _, v := range broker.ReadTopicRetainWillMessage(topic.Topic) {
-				if err := client.Publish(topic.Topic, v); err != nil {
-					logger.Logger.Warn("publish retain will message failed", zap.String("topic", topic.Topic), zap.Error(err), zap.String("messageID", v.MessageID))
-				}
-			}
+		if result[topic.Topic] != 0x00 {
+			continue
 		}
 
+		// sub succeed, publish retain will message
+		for _, v := range broker.ReadTopicRetainWillMessage(topic.Topic) {
+			if err := client.Publish(topic.Topic, v); err != nil {
+				logger.Logger.Warn("publish retain will message failed", zap.String("topic", topic.Topic), zap.Error(err), zap.String("messageID", v.MessageID))
+			}
+		}
+		// sub succeed, publish retain message
+		for _, v := range broker.ReadTopicRetainMessage(topic.Topic) {
+			if err := client.Publish(topic.Topic, v); err != nil {
+				logger.Logger.Warn("publish retain message failed", zap.String("topic", topic.Topic), zap.Error(err), zap.String("messageID", v.MessageID))
+			}
+		}
 	}
 	broker.writePacket(client, subAck)
 }
