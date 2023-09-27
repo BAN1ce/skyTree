@@ -2,6 +2,7 @@ package qos2
 
 import (
 	"context"
+	"github.com/BAN1ce/Tree/proto"
 	"github.com/BAN1ce/skyTree/config"
 	"github.com/BAN1ce/skyTree/inner/broker/store"
 	"github.com/BAN1ce/skyTree/logger"
@@ -13,6 +14,26 @@ import (
 	"time"
 )
 
+type Option func(q *QoS2)
+
+func WithPublishWriter(writer broker.PublishWriter) Option {
+	return func(q *QoS2) {
+		q.meta.writer = writer
+	}
+}
+
+func WithSession(session Session) Option {
+	return func(q *QoS2) {
+		q.session = session
+	}
+}
+
+func WithSubOption(option *proto.SubOption) Option {
+	return func(q *QoS2) {
+		q.meta.subOption = option
+	}
+}
+
 type QoS2 struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -22,18 +43,22 @@ type QoS2 struct {
 	session     Session
 }
 
-func NewQos2(topic string, writer broker.PublishWriter, session Session) *QoS2 {
-	latestMessageID, _ := session.ReadTopicLatestPushedMessageID(topic)
+func NewQos2(topic string, options ...Option) *QoS2 {
+
+	var (
+		latestMessageID string
+	)
 	t := &QoS2{
 		meta: &meta{
 			topic:           topic,
-			qos:             broker.QoS1,
-			writer:          writer,
 			latestMessageID: latestMessageID,
 		},
-		queue:   NewQoS2Queue(writer),
-		session: session,
 	}
+	for _, op := range options {
+		op(t)
+	}
+	t.queue = NewQoS2Queue(t.meta.writer)
+	t.meta.latestMessageID, _ = t.session.ReadTopicLatestPushedMessageID(topic)
 	return t
 }
 
@@ -141,6 +166,9 @@ func (q *QoS2) afterClose() error {
 }
 
 func (q *QoS2) Publish(publish *packet.PublishMessage) error {
+	if q.meta.subOption.NoLocal == true && publish.ClientID == q.meta.writer.GetID() {
+		return nil
+	}
 	if q.ctx.Err() != nil {
 		return q.ctx.Err()
 	}

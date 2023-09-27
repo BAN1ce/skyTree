@@ -25,6 +25,7 @@ func (p *ProtoBufSerializer) Encode(pub *packet.PublishMessage, buf *bytes.Buffe
 			TimeStamp:   pub.TimeStamp,
 			ExpiredTime: pub.ExpiredTime,
 			Will:        pub.Will,
+			ClientID:    pub.ClientID,
 		}
 	)
 	defer func() {
@@ -72,6 +73,7 @@ func (p *ProtoBufSerializer) Decode(rawData []byte) (*packet.PublishMessage, err
 		return nil, err
 	} else {
 		return &packet.PublishMessage{
+			ClientID:      protoMessage.ClientID,
 			MessageID:     protoMessage.MessageID,
 			PublishPacket: ctl.Content.(*packets.Publish),
 			PubReceived:   protoMessage.PubReceived,

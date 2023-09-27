@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"github.com/BAN1ce/Tree/proto"
 	"github.com/BAN1ce/skyTree/inner/broker/client/topic"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/logger"
@@ -111,7 +112,11 @@ func (c *Client) HandleSub(subscribe *packets.Subscribe) map[string]byte {
 	}
 	// create topic instance
 	for _, t := range topics {
-		c.topics.CreateTopic(t.Topic, t.QoS)
+		c.topics.CreateTopic(t.Topic, &proto.SubOption{
+			QoS:               int32(t.QoS),
+			NoLocal:           t.NoLocal,
+			RetainAsPublished: t.RetainAsPublished,
+		})
 		failed[t.Topic] = t.QoS
 	}
 	return failed

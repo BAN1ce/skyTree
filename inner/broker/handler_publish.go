@@ -56,8 +56,12 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 		return
 	}
 	var (
-		topic     = packet.Topic
-		subTopics = broker.subTree.MatchTopic(topic)
+		topic          = packet.Topic
+		subTopics      = broker.subTree.MatchTopic(topic)
+		publishMessgae = &packet2.PublishMessage{
+			ClientID:      client.GetID(),
+			PublishPacket: packet,
+		}
 	)
 	// double check topic name
 	if topic == "" {
@@ -68,8 +72,7 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 
 	// TODO: should emit all wildcard store
 	// TODO: should emit all wildcard store
-	event.Driver.Emit(event.ClientPublish, topic)
-	event.Driver.Emit(event.ReceivedTopicPublishEventName(topic), topic, packet)
+	event.GlobalEvent.EmitClientPublish(topic, publishMessgae)
 
 	switch qos {
 	case broker2.QoS0:
@@ -82,7 +85,7 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 			return
 		}
 		// store message
-		if _, err = broker.store.StorePublishPacket(subTopics, &packet2.PublishMessage{PublishPacket: packet}); err != nil {
+		if _, err = broker.store.StorePublishPacket(subTopics, publishMessgae); err != nil {
 			logger.Logger.Error("store publish packet error", zap.Error(err), zap.String("store", topic))
 			pubAck.ReasonCode = packets.PubackUnspecifiedError
 		} else {

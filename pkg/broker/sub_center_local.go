@@ -17,10 +17,12 @@ func NewLocalSubCenter() *LocalSubCenter {
 	}
 }
 func (l *LocalSubCenter) CreateSub(clientID string, topics []packets.SubOptions) error {
-	var topicsRequest = make(map[string]*proto.SubInfo)
+	var topicsRequest = make(map[string]*proto.SubOption)
 	for _, opt := range topics {
-		topicsRequest[opt.Topic] = &proto.SubInfo{
-			QoS: int32(opt.QoS),
+		topicsRequest[opt.Topic] = &proto.SubOption{
+			QoS:               int32(opt.QoS),
+			NoLocal:           opt.NoLocal,
+			RetainAsPublished: opt.RetainAsPublished,
 		}
 	}
 

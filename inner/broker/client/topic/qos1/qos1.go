@@ -2,6 +2,7 @@ package qos1
 
 import (
 	"context"
+	"github.com/BAN1ce/Tree/proto"
 	"github.com/BAN1ce/skyTree/config"
 	"github.com/BAN1ce/skyTree/inner/broker/store"
 	"github.com/BAN1ce/skyTree/logger"
@@ -17,6 +18,26 @@ type StoreEvent interface {
 	DeleteListenMessageStoreEvent(topic string, handler func(i ...interface{}))
 }
 
+type Option func(q *QoS1)
+
+func WithPublishWriter(writer broker.PublishWriter) Option {
+	return func(q *QoS1) {
+		q.meta.writer = writer
+	}
+}
+
+func WithSession(session Session) Option {
+	return func(q *QoS1) {
+		q.session = session
+	}
+}
+
+func WithSubOption(option *proto.SubOption) Option {
+	return func(q *QoS1) {
+		q.meta.subOption = option
+	}
+}
+
 type QoS1 struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
@@ -26,18 +47,21 @@ type QoS1 struct {
 	session      Session
 }
 
-func NewQos1(topic string, writer broker.PublishWriter, session Session) *QoS1 {
-	latestMessageID, _ := session.ReadTopicLatestPushedMessageID(topic)
+func NewQos1(topic string, options ...Option) *QoS1 {
+	var (
+		latestMessageID string
+	)
 	t := &QoS1{
 		meta: &meta{
 			topic:           topic,
-			qos:             broker.QoS1,
-			writer:          writer,
 			latestMessageID: latestMessageID,
 		},
-		publishQueue: NewPublishQueue(writer),
-		session:      session,
 	}
+	for _, op := range options {
+		op(t)
+	}
+	t.publishQueue = NewPublishQueue(t.meta.writer)
+	t.meta.latestMessageID, _ = t.session.ReadTopicLatestPushedMessageID(topic)
 	return t
 }
 
@@ -129,6 +153,9 @@ func (q *QoS1) afterClose() error {
 }
 
 func (q *QoS1) Publish(publish *packet.PublishMessage) error {
+	if q.meta.subOption.NoLocal == true && publish.ClientID == q.meta.writer.GetID() {
+		return nil
+	}
 	if q.ctx.Err() != nil {
 		return q.ctx.Err()
 	}

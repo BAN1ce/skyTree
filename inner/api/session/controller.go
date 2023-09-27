@@ -34,11 +34,11 @@ func (c *Controller) Info(ctx echo.Context) error {
 	}
 	var data infoData
 
-	for topic, qos := range session.ReadSubTopics() {
+	for topic, subOption := range session.ReadSubTopics() {
 		lastMessageID, _ := session.ReadTopicLatestPushedMessageID(topic)
 		data.SubTopic = append(data.SubTopic, subTopic{
 			Topic:         topic,
-			Qos:           int(qos),
+			Qos:           int(subOption.QoS),
 			LastMessageID: lastMessageID,
 		})
 	}

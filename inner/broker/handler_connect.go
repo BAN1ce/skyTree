@@ -52,7 +52,7 @@ func (c *ConnectHandler) Handle(broker *Broker, client *client2.Client, packet *
 	}
 
 	// handle will message
-	if err = c.handleWillMessage(broker, connectPacket, client.GetSession()); err != nil {
+	if err = c.handleWillMessage(broker, connectPacket, client.GetSession(), client); err != nil {
 		logger.Logger.Warn("handle will message error: ", zap.Error(err), zap.String("client", client.MetaString()))
 		broker.writePacket(client, conAck)
 		client.Close()
@@ -120,7 +120,7 @@ func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client
 }
 
 // handleWillMessage handle will message, if willing flag is true, store will message to store and set will message id to broker state.
-func (c *ConnectHandler) handleWillMessage(broker *Broker, connect *packets.Connect, session broker2.Session) error {
+func (c *ConnectHandler) handleWillMessage(broker *Broker, connect *packets.Connect, session broker2.Session, client *client2.Client) error {
 	if !connect.WillFlag {
 		return nil
 	}
@@ -136,6 +136,7 @@ func (c *ConnectHandler) handleWillMessage(broker *Broker, connect *packets.Conn
 	messageID, err := broker.store.StorePublishPacket(map[string]int32{
 		connect.WillTopic: int32(connect.WillQOS),
 	}, &packet2.PublishMessage{
+		ClientID:      client.GetID(),
 		MessageID:     "",
 		PublishPacket: publishPacket,
 		TimeStamp:     time.Now().Unix(),

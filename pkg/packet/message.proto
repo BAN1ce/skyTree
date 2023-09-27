@@ -12,4 +12,5 @@ message StorePublishMessage  {
   int64 TimeStamp = 6;
   int64  ExpiredTime = 7;
   bool Will = 8;
+  string ClientID = 9;
 }

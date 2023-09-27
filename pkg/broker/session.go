@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"github.com/BAN1ce/Tree/proto"
 	"github.com/eclipse/paho.golang/packets"
 	"github.com/google/uuid"
 )
@@ -15,8 +16,8 @@ type Session interface {
 }
 
 type SessionTopic interface {
-	ReadSubTopics() (topics map[string]int32)
-	CreateSubTopic(topic string, qos int32)
+	ReadSubTopics() (topics map[string]*proto.SubOption)
+	CreateSubTopic(topic string, option *proto.SubOption)
 	DeleteSubTopic(topic string)
 	SessionTopicMessage
 }

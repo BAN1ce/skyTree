@@ -2,11 +2,11 @@ package session
 
 import (
 	"encoding/json"
+	"github.com/BAN1ce/Tree/proto"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/errs"
 	"go.uber.org/zap"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -31,16 +31,20 @@ func (s *Session) Release() {
 	}
 }
 
-func (s *Session) ReadSubTopics() (topics map[string]int32) {
-	topics = make(map[string]int32)
+func (s *Session) ReadSubTopics() (topics map[string]*proto.SubOption) {
+	topics = make(map[string]*proto.SubOption)
 	m, err := s.store.DefaultReadPrefixKey(broker.ClientSubTopicKeyPrefix(s.clientID))
 	if err != nil {
 		logger.Logger.Error("read sub topics failed", zap.Error(err), zap.String("clientID", s.clientID))
 		return nil
 	}
 	for k, v := range m {
+		option := &proto.SubOption{}
 		// QoS should not greater than 2, so int is enough
-		qos, err := strconv.Atoi(v)
+		if err := json.Unmarshal([]byte(v), option); err != nil {
+			logger.Logger.Error("unmarshal sub option failed", zap.Error(err), zap.String("clientID", s.clientID))
+			continue
+		}
 		if err != nil {
 			logger.Logger.Error("string to int32 failed", zap.Error(err), zap.String("clientID", s.clientID))
 			continue
@@ -49,19 +53,20 @@ func (s *Session) ReadSubTopics() (topics map[string]int32) {
 			logger.Logger.Error("trim prefix failed", zap.Error(err), zap.String("clientID", s.clientID))
 			continue
 		} else {
-			topics[topic] = int32(qos)
+			topics[topic] = option
 		}
 	}
 	return
 }
 
-func (s *Session) CreateSubTopic(topic string, qos int32) {
+func (s *Session) CreateSubTopic(topic string, option *proto.SubOption) {
 	if topic == "" {
 		return
 	}
-	if err := s.store.DefaultPutKey(broker.ClientSubTopicKey(s.clientID, topic), strconv.Itoa(int(qos))); err != nil {
+	data, _ := json.Marshal(option)
+	if err := s.store.DefaultPutKey(broker.ClientSubTopicKey(s.clientID, topic), string(data)); err != nil {
 		logger.Logger.Error("create sub topic failed", zap.Error(err), zap.String("clientID", s.clientID),
-			zap.String("topic", topic), zap.Int32("qos", qos))
+			zap.String("topic", topic), zap.Int32("qos", option.QoS))
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 )
 
 type PublishMessage struct {
+	ClientID      string
 	MessageID     string
 	PublishPacket *packets.Publish
 	PubRelPacket  *packets.Pubrel
