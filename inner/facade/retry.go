@@ -13,8 +13,8 @@ type RetrySchedule interface {
 }
 
 var (
-	PublishRetry RetrySchedule
-	PubRelRetry  RetrySchedule
+	publishRetry RetrySchedule
+	pubRelRetry  RetrySchedule
 )
 var (
 	OncePublishRetry sync.Once
@@ -25,10 +25,10 @@ func SinglePublishRetry(option ...retry.Option) RetrySchedule {
 	OncePublishRetry.Do(func() {
 		var s = retry.NewSchedule(config.GetRootContext(), option...)
 		s.Start()
-		PublishRetry = s
+		publishRetry = s
 
 	})
-	return PublishRetry
+	return publishRetry
 }
 
 func GetPublishRetry() RetrySchedule {
@@ -38,12 +38,17 @@ func GetPublishRetry() RetrySchedule {
 	return SinglePublishRetry(retry.WithInterval(cfg.GetInterval()), retry.WithSlotNum(cfg.GetSlotNum()))
 }
 
+func DeletePublishRetryKey(key string) {
+	GetPubRelRetry().Delete(key)
+}
+
 func SinglePubRelRetry(ctx context.Context, option ...retry.Option) RetrySchedule {
 	OncePubRelRetry.Do(func() {
 		var s = retry.NewSchedule(ctx, option...)
-		PubRelRetry = s
+		s.Start()
+		pubRelRetry = s
 	})
-	return PubRelRetry
+	return pubRelRetry
 }
 
 func GetPubRelRetry() RetrySchedule {

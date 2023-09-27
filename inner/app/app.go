@@ -7,10 +7,14 @@ import (
 	"github.com/BAN1ce/skyTree/inner/api"
 	"github.com/BAN1ce/skyTree/inner/broker"
 	"github.com/BAN1ce/skyTree/inner/broker/session"
+	"github.com/BAN1ce/skyTree/inner/broker/state"
 	"github.com/BAN1ce/skyTree/inner/broker/store"
+	"github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/inner/metric"
 	"github.com/BAN1ce/skyTree/inner/version"
+	broker2 "github.com/BAN1ce/skyTree/pkg/broker"
+	"github.com/nutsdb/nutsdb"
 	"log"
 	"sync"
 )
@@ -30,19 +34,45 @@ type App struct {
 
 func NewApp() *App {
 	// todo: get config
-	metric.Init()
+	metric.Boot()
+	//var (
+	//	subTree = app2.NewApp()
+	//)
+	//if err := subTree.StartTopicCluster(context.TODO(), []app2.Option{
+	//	app2.WithInitMember(config.GetTree().InitNode),
+	//	app2.WithJoin(false),
+	//	app2.WithNodeConfig(config.GetTree().NodeHostConfig),
+	//	app2.WithConfig(config.GetTree().DragonboatConfig),
+	//	app2.WithStateMachine(store2.NewState()),
+	//}...); err != nil {
+	//	log.Fatal("start store cluster failed", err)
+	//}
 	var (
-		clientManager        = broker.NewManager()
-		sessionManager       = session.NewSessionManager()
-		dbStore              = store.NewNutsDBStore()
+		clientManager  = broker.NewClientManager()
+		kvStore        = broker2.NewLocalKeyValueStore()
+		sessionManager = session.NewSessions(kvStore)
+	)
+	var (
+		dbStore = store.NewLocalStore(nutsdb.Options{
+			EntryIdxMode: nutsdb.HintKeyValAndRAMIdxMode,
+			SegmentSize:  nutsdb.MB * 256,
+			NodeNum:      1,
+			RWMode:       nutsdb.MMap,
+			SyncEnable:   true,
+		}, nutsdb.WithDir("./data/nutsdb"))
+	)
+	event.Boot()
+	store.Boot(dbStore, event.GlobalEvent)
+	var (
 		publishRetrySchedule = facade.SinglePublishRetry()
 		app                  = &App{
 			brokerCore: broker.NewBroker(
 				broker.WithPublishRetry(publishRetrySchedule),
-				broker.WithStore(store.NewStoreWrapper(dbStore)),
+				broker.WithStore(store.NewStoreWrapper()),
+				broker.WithState(state.NewState(kvStore)),
 				broker.WithSessionManager(sessionManager),
 				broker.WithClientManager(clientManager),
-				broker.WithSubTree(broker.NewSubTree()),
+				broker.WithSubCenter(broker2.NewLocalSubCenter()),
 				broker.WithHandlers(&broker.Handlers{
 					Connect:     broker.NewConnectHandler(),
 					Publish:     broker.NewPublishHandler(),
@@ -60,7 +90,10 @@ func NewApp() *App {
 	)
 	app.components = []component{
 		app.brokerCore,
-		api.NewAPI(fmt.Sprintf(":%d", config.GetServer().GetPort()), api.WithClientManager(clientManager), api.WithStore(dbStore)),
+		api.NewAPI(fmt.Sprintf(":%d", config.GetServer().GetPort()),
+			api.WithClientManager(clientManager),
+			api.WithStore(dbStore),
+			api.WithSessionManager(sessionManager)),
 	}
 	return app
 }

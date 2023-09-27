@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package response;
+option go_package = "./response;response";
+
+message BaseResponse {
+  int32 code = 1;
+  string message = 2;
+}
+
+message GetSubTopicResponse {
+  BaseResponse base = 1;
+  repeated string subTopic = 2;
+}
+message Get

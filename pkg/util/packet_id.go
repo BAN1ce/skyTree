@@ -3,6 +3,7 @@ package util
 import (
 	"math"
 	"math/rand"
+	"strconv"
 	"sync/atomic"
 )
 
@@ -29,6 +30,14 @@ func randomInitPacketID() uint32 {
 	return uint32(rand.Intn(math.MaxUint32))
 }
 
+func (p *PacketIDFactory) SetID(id uint16) {
+	p.id.Store(uint32(id))
+}
+
+func (p *PacketIDFactory) ReadID() uint16 {
+	return uint16(p.id.Load())
+}
+
 func (p *PacketIDFactory) Generate() uint16 {
 	var (
 		newID uint16
@@ -44,4 +53,16 @@ func (p *PacketIDFactory) Generate() uint16 {
 	}
 	p.id.Store(uint32(newID))
 	return newID
+}
+
+func PacketIDToString(id uint16) string {
+	return string(id)
+}
+
+func StringToPacketID(id string) uint16 {
+	i, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return uint16(i)
 }

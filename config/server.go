@@ -6,9 +6,10 @@ type Server struct {
 }
 
 func GetServer() Server {
+	// FIXME:  use flag at here  not graceful
 	return Server{
-		Port:       9526,
-		BrokerPort: 1883,
+		Port:       *httpPort,
+		BrokerPort: *brokerPort,
 	}
 }
 

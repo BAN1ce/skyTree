@@ -1,0 +1,25 @@
+{
+  "broker": {
+    "listen": [
+      {
+        "address": "tcp://localhost:1883"
+      }
+    ],
+    "connect_ack_property": {
+      "session_expired": "100m",
+      "receive_maximum": 100,
+      "max_qos": 2,
+      "retain_available": true,
+      "maximum_packet_size": 100,
+      "topic_alias_maximum": 100,
+      "wildcard_subscription_available": true,
+      "subscription_identifier_available": true,
+      "shared_subscription_available": true,
+      "server_keep_alive": 100,
+      "response_information": "response_information",
+      "server_reference": "server_reference",
+      "authentication_method": "authentication_method",
+      "authentication_data": "authentication_data"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package system;
+option go_package = "./system;system";
+
+message Session {
+  string ID =1;
+  map<string,SessionTopic> Topics =2;
+  int64 LastActiveTime =3;
+}
+
+message SessionTopic {
+  string Topic = 1;
+  int32 QoS= 2;
+  repeated string UnAckMessageID =3;
+  repeated uint32 UnReceivePacketID =4;
+  repeated uint32 UnCompletePacketID =5;
+  string LastAckMessageID =6;
+}
+
+message SystemState {
+  Session Session =1;
+}
