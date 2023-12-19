@@ -2,20 +2,22 @@ package client
 
 import (
 	"context"
-	"errors"
 	"github.com/BAN1ce/Tree/proto"
 	"github.com/BAN1ce/skyTree/inner/broker/client/topic"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/BAN1ce/skyTree/pkg/broker"
+	"github.com/BAN1ce/skyTree/pkg/broker/session"
+	topic2 "github.com/BAN1ce/skyTree/pkg/broker/topic"
 	"github.com/BAN1ce/skyTree/pkg/errs"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/BAN1ce/skyTree/pkg/retry"
 	"github.com/BAN1ce/skyTree/pkg/state"
-	"github.com/BAN1ce/skyTree/pkg/util"
+	"github.com/BAN1ce/skyTree/pkg/utils"
 	"github.com/eclipse/paho.golang/packets"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"net"
 	"strings"
@@ -30,56 +32,67 @@ type PacketIDFactory interface {
 type Config struct {
 	WindowSize       int
 	ReadStoreTimeout time.Duration
+	KeepAlive        time.Duration
 }
 
 type Handler interface {
-	HandlePacket(*Client, *packets.ControlPacket)
+	HandlePacket(*Client, *packets.ControlPacket) error
 }
 
 type Client struct {
-	ID                string `json:"id"`
-	connectProperties *broker.SessionConnectProperties
-	ctx               context.Context
-	mux               sync.RWMutex
-	conn              net.Conn
-	handler           Handler
-	state             state.State
-	options           *Options
-	packetIDFactory   PacketIDFactory
-	publishBucket     *util.Bucket
-	messages          chan pkg.Message
-	topics            *topic.Topics
-	identifierIDTopic map[uint16]string
-	QoS2              *HandleQoS2
-	topicAlias        map[uint16]string
-	subIdentifier     map[string]int
-	willFlag          bool
-	keepAlive         time.Duration
+	ID                   string `json:"id"`
+	UID                  string `json:"UID"`
+	connectProperties    *session.ConnectProperties
+	ctx                  context.Context
+	cancel               context.CancelCauseFunc
+	mux                  sync.RWMutex
+	conn                 net.Conn
+	handler              []Handler
+	state                state.State
+	options              *Options
+	packetIDFactory      PacketIDFactory
+	publishBucket        *utils.Bucket
+	messages             chan pkg.Message
+	topicManager         *topic.Manager
+	shareTopic           map[string]struct{}
+	identifierIDTopic    map[uint16]string
+	QoS2                 *QoS2Handler
+	topicAliasFromClient map[uint16]string
+	subIdentifier        map[string]int
+	willFlag             bool
+	keepAlive            time.Duration
+	aliveTime            time.Time
 }
 
 func NewClient(conn net.Conn, option ...Option) *Client {
 	var (
 		c = &Client{
-			conn:              conn,
-			options:           new(Options),
-			identifierIDTopic: map[uint16]string{},
-			topicAlias:        map[uint16]string{},
+			UID:                  uuid.NewString(),
+			conn:                 conn,
+			options:              new(Options),
+			identifierIDTopic:    map[uint16]string{},
+			topicAliasFromClient: map[uint16]string{},
+			shareTopic:           map[string]struct{}{},
 		}
 	)
 	for _, o := range option {
 		o(c.options)
 	}
-	c.packetIDFactory = util.NewPacketIDFactory()
+	c.packetIDFactory = utils.NewPacketIDFactory()
 	c.messages = make(chan pkg.Message, c.options.cfg.WindowSize)
-	c.publishBucket = util.NewBucket(c.options.cfg.WindowSize)
-	c.QoS2 = NewHandleQoS2()
+	c.publishBucket = utils.NewBucket(c.options.cfg.WindowSize)
+	c.QoS2 = NewQoS2Handler()
 
 	return c
 }
 
 func (c *Client) Run(ctx context.Context, handler Handler) {
-	c.ctx = ctx
-	c.handler = handler
+	c.ctx, c.cancel = context.WithCancelCause(ctx)
+	c.topicManager = topic.NewManager(c.ctx)
+	c.handler = []Handler{
+		handler,
+		newInnerHandler(c),
+	}
 	var (
 		controlPacket *packets.ControlPacket
 		err           error
@@ -91,42 +104,62 @@ func (c *Client) Run(ctx context.Context, handler Handler) {
 			c.afterClose()
 			return
 		}
-		handler.HandlePacket(c, controlPacket)
+		for _, handler := range c.handler {
+			if err := handler.HandlePacket(c, controlPacket); err != nil {
+				logger.Logger.Warn("handle packet error", zap.Error(err), zap.String("client", c.MetaString()))
+				c.CloseIgnoreError()
+				break
+			}
+		}
 	}
 }
 
-func (c *Client) HandleSub(subscribe *packets.Subscribe) map[string]byte {
+func (c *Client) HandleSub(subscribe *packets.Subscribe, topics map[string]topic2.Topic) map[string]byte {
 	c.mux.Lock()
 	defer c.mux.Unlock()
 	var (
-		topics        = subscribe.Subscriptions
 		failed        = map[string]byte{}
 		subIdentifier int
 	)
-	// store topic's subIdentifier
-	if tmp := subscribe.Properties.SubscriptionIdentifier; tmp != nil {
-		subIdentifier = *tmp
-		for _, t := range topics {
-			c.subIdentifier[t.Topic] = subIdentifier
+	if subscribe != nil {
+		// store topic's subIdentifier
+		if tmp := subscribe.Properties.SubscriptionIdentifier; tmp != nil {
+			subIdentifier = *tmp
+			for _, t := range subscribe.Subscriptions {
+				c.subIdentifier[t.Topic] = subIdentifier
+			}
 		}
 	}
 	// create topic instance
-	for _, t := range topics {
-		c.topics.CreateTopic(t.Topic, &proto.SubOption{
-			QoS:               int32(t.QoS),
-			NoLocal:           t.NoLocal,
-			RetainAsPublished: t.RetainAsPublished,
-		})
-		failed[t.Topic] = t.QoS
+
+	for topicName, t := range topics {
+		c.topicManager.AddTopic(topicName, t)
 	}
 	return failed
 }
 
+func (c *Client) AddTopics(topic map[string]topic2.Topic) {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+	for topicName, t := range topic {
+		c.topicManager.AddTopic(topicName, t)
+	}
+}
+
+func (c *Client) readUnfinishedMessage(topic string) []*packet.Message {
+	if c.options.session == nil {
+		logger.Logger.Warn("session is nil", zap.String("client", c.MetaString()))
+		return nil
+	}
+	return c.options.session.ReadTopicUnFinishedMessage(topic)
+}
+
 func (c *Client) HandleUnSub(topicName string) {
+	// TODO: should finish all cache message before delete topic.
 	c.mux.Lock()
 	defer c.mux.Unlock()
 	c.options.session.DeleteSubTopic(topicName)
-	c.topics.DeleteTopic(topicName)
+	c.topicManager.DeleteTopic(topicName)
 }
 
 func (c *Client) HandlePubAck(pubAck *packets.Puback) {
@@ -135,7 +168,8 @@ func (c *Client) HandlePubAck(pubAck *packets.Puback) {
 		logger.Logger.Warn("pubAck packetID not found store", zap.String("client", c.MetaString()), zap.Uint16("packetID", pubAck.PacketID))
 		return
 	}
-	c.topics.HandlePublishAck(topicName, pubAck)
+	c.publishBucket.PutToken()
+	c.topicManager.HandlePublishAck(topicName, pubAck)
 }
 
 func (c *Client) HandlePubRec(pubRec *packets.Pubrec) {
@@ -144,7 +178,7 @@ func (c *Client) HandlePubRec(pubRec *packets.Pubrec) {
 		logger.Logger.Warn("pubRec packetID not found store", zap.String("client", c.MetaString()), zap.Uint16("packetID", pubRec.PacketID))
 		return
 	}
-	c.topics.HandlePublishRec(topicName, pubRec)
+	c.topicManager.HandlePublishRec(topicName, pubRec)
 }
 
 func (c *Client) HandlePubComp(pubRel *packets.Pubcomp) {
@@ -153,11 +187,18 @@ func (c *Client) HandlePubComp(pubRel *packets.Pubcomp) {
 		logger.Logger.Warn("pubComp packetID not found store", zap.String("client", c.MetaString()), zap.Uint16("packetID", pubRel.PacketID))
 		return
 	}
-	c.topics.HandelPublishComp(topicName, pubRel)
+	c.publishBucket.PutToken()
+	c.topicManager.HandelPublishComp(topicName, pubRel)
 }
 
 func (c *Client) Close() error {
 	return c.conn.Close()
+}
+
+func (c *Client) CloseIgnoreError() {
+	if err := c.conn.Close(); err != nil {
+		logger.Logger.Warn("close conn error", zap.Error(err), zap.String("client", c.MetaString()))
+	}
 }
 
 func (c *Client) afterClose() {
@@ -169,48 +210,73 @@ func (c *Client) afterClose() {
 	if err := c.conn.Close(); err != nil {
 		logger.Logger.Info("close conn error", zap.Error(err), zap.String("client", c.MetaString()))
 	}
-	if err := c.topics.Close(); err != nil {
-		logger.Logger.Warn("close topics error", zap.Error(err), zap.String("client", c.MetaString()))
+
+	//  close normal topicManager
+	if err := c.topicManager.Close(); err != nil {
+		logger.Logger.Warn("close topicManager error", zap.Error(err), zap.String("client", c.MetaString()))
 	}
-	if c.options.session != nil {
-		willMessage, err := c.options.session.GetWillMessage()
-		if err != nil {
-			if !errors.Is(err, errs.ErrSessionWillMessageNotFound) {
-				logger.Logger.Error("get will message error", zap.Error(err), zap.String("client", c.MetaString()))
+
+	//  close share topicManager
+
+	if c.options.session == nil {
+		logger.Logger.Warn("session is nil", zap.String("client", c.MetaString()))
+		return
+	}
+
+	// store unfinished message to session for qos1 and qos2
+	c.storeUnfinishedMessage()
+
+	//  handle will message
+	willMessage, ok, err := c.options.session.GetWillMessage()
+	if err != nil {
+		logger.Logger.Error("get will message error", zap.Error(err), zap.String("client", c.MetaString()))
+		return
+	}
+	if !ok {
+		return
+	}
+
+	var (
+		willDelayInterval = willMessage.Property.GetDelayInterval()
+	)
+
+	if willDelayInterval == 0 {
+		c.options.notifyClose.NotifyWillMessage(willMessage)
+		return
+	}
+
+	// create a delay task to publish will message
+	if err := facade.GetWillDelay().Create(&retry.Task{
+		MaxTimes:     1,
+		MaxTime:      0,
+		IntervalTime: willDelayInterval,
+		Key:          willMessage.DelayTaskID,
+		Data:         willMessage,
+		Job: func(task *retry.Task) {
+			if m, ok := task.Data.(*session.WillMessage); ok {
+				logger.Logger.Debug("will message delay task", zap.String("client", c.MetaString()), zap.String("delayTaskID", task.Key))
+				c.options.notifyClose.NotifyWillMessage(m)
+			} else {
+				logger.Logger.Error("will message type error", zap.String("client", c.MetaString()))
 			}
-			return
-		}
-
-		if willMessage.Property.WillDelayInterval == 0 {
-			c.options.notifyClose.NotifyWillMessage(willMessage)
-			return
-		}
-
-		// create a delay task to publish will message
-		if err := facade.GetWillDelay().Create(&retry.Task{
-			MaxTimes:     1,
-			MaxTime:      0,
-			IntervalTime: time.Duration(willMessage.Property.WillDelayInterval) * time.Second,
-			Key:          willMessage.DelayTaskID,
-			Data:         willMessage,
-			Job: func(task *retry.Task) {
-				if m, ok := task.Data.(*broker.WillMessage); ok {
-					logger.Logger.Debug("will message delay task", zap.String("client", c.MetaString()), zap.String("delayTaskID", task.Key))
-					c.options.notifyClose.NotifyWillMessage(m)
-				} else {
-					logger.Logger.Error("will message type error", zap.String("client", c.MetaString()))
-				}
-			},
-			TimeoutJob: nil,
-		}); err != nil {
-			logger.Logger.Error("create will delay task error", zap.Error(err), zap.String("client", c.MetaString()))
-			return
-		}
-		logger.Logger.Debug("create will delay task success", zap.String("client", c.MetaString()),
-			zap.Int64("delay time", willMessage.Property.WillDelayInterval), zap.String("delayTaskID", willMessage.DelayTaskID))
-
+		},
+		TimeoutJob: nil,
+	}); err != nil {
+		logger.Logger.Error("create will delay task error", zap.Error(err), zap.String("client", c.MetaString()))
+		return
 	}
 
+}
+
+func (c *Client) storeUnfinishedMessage() {
+	var message = c.topicManager.GetUnfinishedMessage()
+	if c.options.session == nil {
+		return
+	}
+	for topicName, message := range message {
+		logger.Logger.Debug("store unfinished message", zap.String("client", c.MetaString()), zap.String("topicName", topicName), zap.Int("message", len(message)))
+		c.options.session.CreateTopicUnFinishedMessage(topicName, message)
+	}
 }
 
 func (c *Client) SetID(id string) {
@@ -219,21 +285,17 @@ func (c *Client) SetID(id string) {
 	c.ID = id
 }
 
-func (c *Client) WritePacket(packet packets.Packet) {
+func (c *Client) WritePacket(packet packets.Packet) error {
 	if packet == nil {
-		return
+		return nil
 	}
 	c.mux.Lock()
 	defer c.mux.Unlock()
 	logger.Logger.Debug("write packet", zap.String("client", c.MetaString()), zap.Any("packet", packet))
-	c.writePacket(packet)
+	return c.writePacket(packet)
 }
-func (c *Client) Write(data []byte) error {
-	// TODO: check size
-	_, err := c.conn.Write(data)
-	return err
-}
-func (c *Client) writePacket(packet packets.Packet) {
+
+func (c *Client) writePacket(packet packets.Packet) error {
 	var (
 		buf              = pool.ByteBufferPool.Get()
 		prepareWriteSize int64
@@ -244,7 +306,30 @@ func (c *Client) writePacket(packet packets.Packet) {
 	// publishAck, subscribeAck, unsubscribeAck should use the same packetID as the original packet
 
 	switch p := packet.(type) {
+
+	case *packets.Connack:
+		// do plugin
+		c.options.plugin.DoSendConnAck(c.ID, p)
+
+	case *packets.Suback:
+		// do plugin
+		c.options.plugin.DoSendSubAck(c.ID, p)
+
+	case *packets.Unsuback:
+		// do plugin
+		c.options.plugin.DoSendUnsubAck(c.ID, p)
+
 	case *packets.Publish:
+		if p.QoS != broker.QoS0 {
+			// request publish bucket
+			select {
+			case <-c.ctx.Done():
+				return c.ctx.Err()
+			case <-c.publishBucket.GetToken():
+			}
+		}
+		// do plugin
+		c.options.plugin.DoSendPublish(c.ID, p)
 		topicName = p.Topic
 		// generate new packetID and store
 		p.PacketID = c.packetIDFactory.Generate()
@@ -255,50 +340,102 @@ func (c *Client) writePacket(packet packets.Packet) {
 		if subIdentifier, ok := c.subIdentifier[p.Topic]; ok {
 			p.Properties.SubscriptionIdentifier = &subIdentifier
 		}
+
+	case *packets.Puback:
+		// do plugin
+		c.options.plugin.DoSendPubAck(c.ID, p)
+
+	case *packets.Pubrec:
+		// do plugin
+		c.options.plugin.DoSendPubRec(c.ID, p)
+
+	case *packets.Pubrel:
+		// do plugin
+		c.options.plugin.DoSendPubRel(c.ID, p)
+
+	case *packets.Pubcomp:
+		// do plugin
+		c.options.plugin.DoSendPubComp(c.ID, p)
+
+	case *packets.Pingresp:
+		// do plugin
+		c.options.plugin.DoSendPingResp(c.ID, p)
+
 	}
 
 	if prepareWriteSize, err = packet.WriteTo(buf); err != nil {
 		logger.Logger.Info("write packet error", zap.Error(err), zap.String("client", c.MetaString()))
 		// TODO: check maximum packet size should close client ?
 	}
-	// TODO: check maximum packet size
+
+	// check maximum packet size
+	if c.connectProperties != nil && c.connectProperties.MaximumPacketSize != nil && *c.connectProperties.MaximumPacketSize != 0 {
+		if buf.Len() > int(*c.connectProperties.MaximumPacketSize) && *c.connectProperties.MaximumPacketSize != 0 {
+			return errs.ErrPacketOversize
+		}
+	}
 	if _, err = c.conn.Write(buf.Bytes()); err != nil {
 		logger.Logger.Info("write packet error", zap.Error(err), zap.String("client", c.MetaString()), zap.Int64("prepareWriteSize", prepareWriteSize), zap.String("topicName", topicName))
 		// TODO: check maximum packet size should close client ?
+		if err := c.conn.Close(); err != nil {
+			logger.Logger.Warn("close conn error", zap.Error(err), zap.String("client", c.MetaString()))
+		}
+		return err
 	}
+	return nil
 }
 
-func (c *Client) SetMeta(session broker.Session, keepAlive time.Duration) error {
+func (c *Client) SetWithOption(ops ...Option) error {
 	c.mux.Lock()
-	c.options.session = session
-	c.topics = topic.NewTopicWithSession(c.ctx, c.options.session, topic.WithWriter(c))
-	c.keepAlive = keepAlive
+	for _, o := range ops {
+		o(c.options)
+	}
+
 	c.mux.Unlock()
 	return nil
 }
 
-func (c *Client) GetSession() broker.Session {
-	c.mux.RLock()
-	defer c.mux.RUnlock()
+type SessionTopicData struct {
+	SubOption  *proto.SubOption
+	UnFinished []*packet.Message
+}
+
+func (c *Client) getSession() session.Session {
 	return c.options.session
 }
 
-func (c *Client) SetWill(message *broker.WillMessage) error {
+func (c *Client) setWill(message *session.WillMessage) error {
 	c.willFlag = true
+	if oldWillMessage, ok, _ := c.options.session.GetWillMessage(); ok {
+		facade.GetWillDelay().Delete(oldWillMessage.DelayTaskID)
+	}
 	return c.options.session.SetWillMessage(message)
 }
-
-func (c *Client) SetTopicAlias(topic string, alias uint16) {
+func (c *Client) DeleteWill() error {
 	c.mux.Lock()
-	c.topicAlias[alias] = topic
+	defer c.mux.Unlock()
+	return c.options.session.DeleteWillMessage()
+}
+
+func (c *Client) SetClientTopicAlias(topic string, alias uint16) {
+	c.mux.Lock()
+	c.topicAliasFromClient[alias] = topic
 	c.mux.Unlock()
 }
 
-func (c *Client) SetConnectProperties(properties *broker.SessionConnectProperties) {
+func (c *Client) SetConnectProperties(properties *session.ConnectProperties) error {
 	c.mux.Lock()
+	defer c.mux.Unlock()
 	c.connectProperties = properties
-	c.options.session.SetConnectProperties(properties)
-	c.mux.Unlock()
+	return c.options.session.SetConnectProperties(properties)
+}
+func (c *Client) GetConnectProperties() session.ConnectProperties {
+	c.mux.RLock()
+	defer c.mux.RUnlock()
+	if c.connectProperties == nil {
+		return session.ConnectProperties{}
+	}
+	return *c.connectProperties
 }
 
 func (c *Client) GetID() string {
@@ -317,12 +454,20 @@ func (c *Client) MetaString() string {
 	return s.String()
 }
 
-func (c *Client) GetTopicAlias(u uint16) string {
+func (c *Client) GetClientTopicAlias(u uint16) string {
 	c.mux.RLock()
 	defer c.mux.RUnlock()
-	return c.topicAlias[u]
+	return c.topicAliasFromClient[u]
 }
 
-func (c *Client) Publish(topic string, message *packet.PublishMessage) error {
-	return c.topics.Publish(topic, message)
+func (c *Client) Publish(topic string, message *packet.Message) error {
+	return c.topicManager.Publish(topic, message)
+}
+
+func (c *Client) RefreshAliveTime() {
+	c.aliveTime = time.Now()
+}
+
+func (c *Client) IsPingTimeout() bool {
+	return time.Since(c.aliveTime) > c.keepAlive
 }

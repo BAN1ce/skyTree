@@ -26,14 +26,14 @@ type TopicStoreInfo interface {
 }
 
 type TopicMessageStore interface {
-	ReadFromTimestamp(ctx context.Context, topic string, timestamp time.Time, limit int) ([]packet.PublishMessage, error)
-	ReadTopicMessagesByID(ctx context.Context, topic, id string, limit int, include bool) ([]packet.PublishMessage, error)
+	ReadFromTimestamp(ctx context.Context, topic string, timestamp time.Time, limit int) ([]*packet.Message, error)
+	ReadTopicMessagesByID(ctx context.Context, topic, id string, limit int, include bool) ([]*packet.Message, error)
 	CreatePacket(topic string, value []byte) (id string, err error)
 	DeleteTopicMessageID(ctx context.Context, topic, messageID string) error
 }
 
 // Encode publish packet to bytes
-func Encode(version serializer.SerialVersion, publish *packet.PublishMessage, buf *bytes.Buffer) error {
+func Encode(version serializer.SerialVersion, publish *packet.Message, buf *bytes.Buffer) error {
 	if serializer, ok := storeSerializerFactory[version]; ok {
 		buf.WriteByte(version)
 		return serializer.Encode(publish, buf)
@@ -43,7 +43,7 @@ func Encode(version serializer.SerialVersion, publish *packet.PublishMessage, bu
 }
 
 // Decode bytes to publish packet
-func Decode(rawData []byte) (*packet.PublishMessage, error) {
+func Decode(rawData []byte) (*packet.Message, error) {
 	if len(rawData) == 0 {
 		return nil, errs.ErrStoreMessageLength
 	}
@@ -62,6 +62,6 @@ var (
 )
 
 type StoreSerializer interface {
-	Encode(publish *packet.PublishMessage, buf *bytes.Buffer) error
-	Decode(rawData []byte) (*packet.PublishMessage, error)
+	Encode(publish *packet.Message, buf *bytes.Buffer) error
+	Decode(rawData []byte) (*packet.Message, error)
 }

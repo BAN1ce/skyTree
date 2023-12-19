@@ -30,7 +30,7 @@ type StorePublishMessage struct {
 	PubRelPacket  []byte `protobuf:"bytes,3,opt,name=PubRelPacket,proto3" json:"PubRelPacket,omitempty"`
 	PubReceived   bool   `protobuf:"varint,4,opt,name=PubReceived,proto3" json:"PubReceived,omitempty"`
 	FromSession   bool   `protobuf:"varint,5,opt,name=FromSession,proto3" json:"FromSession,omitempty"`
-	TimeStamp     int64  `protobuf:"varint,6,opt,name=TimeStamp,proto3" json:"TimeStamp,omitempty"`
+	TimeStamp     int64  `protobuf:"varint,6,opt,name=Timestamp,proto3" json:"Timestamp,omitempty"`
 	ExpiredTime   int64  `protobuf:"varint,7,opt,name=ExpiredTime,proto3" json:"ExpiredTime,omitempty"`
 	Will          bool   `protobuf:"varint,8,opt,name=Will,proto3" json:"Will,omitempty"`
 	ClientID      string `protobuf:"bytes,9,opt,name=ClientID,proto3" json:"ClientID,omitempty"`

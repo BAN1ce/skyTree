@@ -1,41 +1,33 @@
 #!/bin/bash
 
-# Get the current directory
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+# 设置Go应用程序的目录
+APP_DIR="../cmd"
 
-# Set the version and build time
-VERSION="1.0.0"
-BUILD_TIME=$(date +"%Y-%m-%d_%H:%M:%S")
+# 设置Dockerfile路径
+DOCKERFILE_PATH="$APP_DIR/../build/Dockerfile"
 
-# Set the output directory
-OUTPUT_DIR="$DIR/bin"
+# 设置Docker镜像的名称和标签
+IMAGE_NAME="skytree"
+IMAGE_TAG="latest"
 
-# Create the output directory
-mkdir -p $OUTPUT_DIR
+# 进入应用程序目录
+cd "$APP_DIR" || exit
 
-# Define the platform array
-PLATFORMS=("linux/amd64" "linux/386" "windows/amd64" "windows/386" "darwin/amd64")
+# 编译Go应用程序
+GOOS=linux GOARCH=amd64 go build -o app
+#
+# 构建Docker镜像
+docker build -t "$IMAGE_NAME:$IMAGE_TAG" -f "$DOCKERFILE_PATH" .
 
-# Loop through all the platforms and compile
-for PLATFORM in "${PLATFORMS[@]}"
-do
-  # Separate the OS and architecture
-  OS=$(echo $PLATFORM | cut -d '/' -f 1)
-  ARCH=$(echo $PLATFORM | cut -d '/' -f 2)
+# 删除本地的旧容器和镜像
+docker stop "$IMAGE_NAME" || true && docker rm "$IMAGE_NAME" || true
+docker rmi $(docker images -f "dangling=true" -q) || true
 
-  # Set the output filename
-  if [ $OS = "windows" ]; then
-    OUTPUT_NAME="myapp.exe"
-  else
-    OUTPUT_NAME="myapp"
-  fi
+# 运行Docker容器
+docker run -d --name="$IMAGE_NAME" "$IMAGE_NAME:$IMAGE_TAG"
 
-  # Print the platform being compiled
-  echo "Compiling for $OS/$ARCH..."
+# 设置开机启动
+echo "@reboot cd $APP_DIR && docker run -d --name=$IMAGE_NAME $IMAGE_NAME:$IMAGE_TAG" | crontab -
 
-  # Compile the binary file
-  GOOS=$OS GOARCH=$ARCH go build -ldflags "-X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" -o "$OUTPUT_DIR/$OS-$ARCH/$OUTPUT_NAME" "$DIR/main.go"
-done
-
-# Print compilation complete
-echo "All platforms compiled successfully!"
+# 输出成功信息
+echo "Go应用程序已经成功编译、打包成Docker镜像，并设置为开机自动执行。"

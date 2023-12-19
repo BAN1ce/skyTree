@@ -4,8 +4,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	app2 "github.com/BAN1ce/skyTree/inner/app"
+	app2 "github.com/BAN1ce/skyTree/app"
 	"github.com/BAN1ce/skyTree/logger"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.uber.org/zap"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -25,6 +28,14 @@ func main() {
 		app         = app2.NewApp()
 		ctx, cancel = context.WithCancel(context.Background())
 	)
+	// FIXME move to other place
+	http.Handle("/metrics", promhttp.Handler())
+	go func() {
+		if err := http.ListenAndServe(":12527", nil); err != nil {
+			logger.Logger.Error("listen and serve failed", zap.Error(err))
+		}
+	}()
+
 	app.Start(ctx)
 	fmt.Println("Starting with version: ", app.Version())
 	fmt.Println(logo())

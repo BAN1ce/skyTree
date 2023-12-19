@@ -1,11 +1,20 @@
 package event
 
-import "github.com/BAN1ce/skyTree/pkg/packet"
+import (
+	"github.com/BAN1ce/skyTree/pkg/packet"
+	"github.com/eclipse/paho.golang/packets"
+	"github.com/kataras/go-events"
+)
+
+var (
+	Driver = events.New()
+)
 
 var GlobalEvent *Event
 
 func Boot() {
 	GlobalEvent = &Event{}
+	createClientMetricListen()
 }
 
 type Event struct {
@@ -31,6 +40,10 @@ func (e *Event) DeleteListenMessageStoreEvent(topic string, handler func(i ...in
 	Driver.RemoveListener(TopicMessageStoredEventName(topic), handler)
 }
 
-func (e *Event) EmitClientPublish(topic string, publish *packet.PublishMessage) {
+func (e *Event) EmitClientPublish(topic string, publish *packet.Message) {
 	Driver.Emit(ReceivedTopicPublishEventName(topic), topic, publish)
+}
+
+func (e *Event) EmitMQTTPacket(eventName MQTTEventName, packet packets.Packet) {
+	Driver.Emit(events.EventName(eventName), packet)
 }

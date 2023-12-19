@@ -2,6 +2,8 @@ package retry
 
 import (
 	"context"
+	"github.com/BAN1ce/skyTree/logger"
+	"go.uber.org/zap"
 	"time"
 )
 
@@ -51,10 +53,18 @@ func WithSlotNum(slotNum int) Option {
 	}
 }
 
+func WithName(name string) Option {
+	return func(schedule *DelayTaskSchedule) {
+		schedule.scheduleName = name
+	}
+
+}
+
 type DelayTaskSchedule struct {
-	interval time.Duration
-	slotNum  int
-	tw       *TimeWheel
+	scheduleName string
+	interval     time.Duration
+	slotNum      int
+	tw           *TimeWheel
 }
 
 func NewDelayTaskSchedule(ctx context.Context, handler func(key string, data interface{}), options ...Option) *DelayTaskSchedule {
@@ -76,9 +86,11 @@ func (d *DelayTaskSchedule) Start() {
 }
 
 func (d *DelayTaskSchedule) Create(task *Task) error {
+	logger.Logger.Debug("create task", zap.String("task", task.Key), zap.String("schedule", d.scheduleName))
 	return d.tw.CreateTask(task.Key, task.IntervalTime, task)
 }
 
 func (d *DelayTaskSchedule) Delete(key string) {
+	logger.Logger.Debug("delete task", zap.String("task", key), zap.String("schedule", d.scheduleName))
 	d.tw.DeleteTask(key)
 }

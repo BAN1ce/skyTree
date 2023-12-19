@@ -2,6 +2,7 @@ package session
 
 import (
 	"github.com/BAN1ce/skyTree/pkg/broker"
+	"github.com/BAN1ce/skyTree/pkg/broker/session"
 	"time"
 )
 
@@ -9,30 +10,30 @@ type Sessions struct {
 	store *broker.KeyValueStoreWithTimeout
 }
 
+// NewSessions returns a new session manager.
+// The session manager is responsible for managing the sessions.
+// Parameter store broker.KeyValueStore is used to store the session data. if single node, you can use memory store.
 func NewSessions(store broker.KeyValueStore) *Sessions {
 	return &Sessions{store: broker.NewKeyValueStoreWithTimout(store, 3*time.Second)}
-
 }
 
-func (s *Sessions) ReadSession(key string) (broker.Session, bool) {
-	_, ok, err := s.store.DefaultReadKey(broker.ClientKey(key).String())
+// ReadClientSession returns a client session.
+func (s *Sessions) ReadClientSession(clientID string) (session.Session, bool) {
+	m, err := s.store.DefaultReadPrefixKey(clientSessionPrefix(clientID))
 	if err != nil {
 		return nil, false
 	}
-	if ok {
-		return newSession(key, s.store), true
+	if len(m) > 0 {
+		return newSession(clientID, s.store), true
 	}
 	return nil, false
 }
 
-func (s *Sessions) DeleteSession(key string) {
-	newSession(key, s.store).Release()
+// AddClientSession adds a client session.
+func (s *Sessions) AddClientSession(key string, session session.Session) {
 }
 
-func (s *Sessions) CreateSession(key string, session broker.Session) {
-	return
-}
-
-func (s *Sessions) NewSession(key string) broker.Session {
+// NewClientSession returns a new client session.
+func (s *Sessions) NewClientSession(key string) session.Session {
 	return newSession(key, s.store)
 }

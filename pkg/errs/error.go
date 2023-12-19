@@ -9,6 +9,7 @@ var (
 	ErrServerNotStarted     = errors.New("server not started")
 )
 
+// Client
 var (
 	ErrInvalidPacket              = errors.New("invalid packet")
 	ErrInvalidRequestResponseInfo = errors.New("invalid api response info")
@@ -23,6 +24,7 @@ var (
 	ErrClientClosed               = errors.New("client closed")
 	ErrTopicAliasNotFound         = errors.New("topic alias not found")
 	ErrTopicAliasInvalid          = errors.New("topic alias invalid")
+	ErrPacketOversize             = errors.New("packet oversize")
 )
 
 var (
@@ -36,9 +38,14 @@ var (
 	ErrStoreVersionInvalid = errors.New("store version invalid")
 	ErrStoreReadCreateTime = errors.New("read create time failed")
 	ErrStoreTopicsEmpty    = errors.New("store topics empty")
+	ErrStoreKeyNotFound    = errors.New("store key not found")
 )
 
 var (
 	ErrSessionConnectPropertiesNotFound = errors.New("session connect properties not found")
 	ErrSessionWillMessageNotFound       = errors.New("session will message not found")
+)
+
+var (
+	ErrClientRemoved = errors.New("client removed")
 )

@@ -25,5 +25,5 @@ func GetWillDelay() RetrySchedule {
 	var (
 		cfg = config.GetTimeWheel()
 	)
-	return SingleWillDelay(retry.WithInterval(cfg.GetInterval()), retry.WithSlotNum(cfg.GetSlotNum()))
+	return SingleWillDelay(retry.WithInterval(cfg.GetInterval()), retry.WithSlotNum(cfg.GetSlotNum()), retry.WithName("willDelay"))
 }

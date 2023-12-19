@@ -14,17 +14,17 @@ const ProtoBufVersion = SerialVersion(iota + 1)
 type ProtoBufSerializer struct {
 }
 
-func (p *ProtoBufSerializer) Encode(pub *packet.PublishMessage, buf *bytes.Buffer) error {
+func (p *ProtoBufSerializer) Encode(pub *packet.Message, buf *bytes.Buffer) error {
 	var (
 		pubBuf       = pool.ByteBufferPool.Get()
 		pubRelBuf    = pool.ByteBufferPool.Get()
 		protoMessage = packet.StorePublishMessage{
 			MessageID:   pub.MessageID,
-			PubReceived: pub.PubReceived,
-			FromSession: pub.FromSession,
-			TimeStamp:   pub.TimeStamp,
+			PubReceived: pub.IsPubReceived(),
+			FromSession: pub.IsFromSession(),
+			TimeStamp:   pub.Timestamp,
 			ExpiredTime: pub.ExpiredTime,
-			Will:        pub.Will,
+			Will:        pub.IsWill(),
 			ClientID:    pub.ClientID,
 		}
 	)
@@ -58,7 +58,7 @@ func (p *ProtoBufSerializer) Encode(pub *packet.PublishMessage, buf *bytes.Buffe
 
 }
 
-func (p *ProtoBufSerializer) Decode(rawData []byte) (*packet.PublishMessage, error) {
+func (p *ProtoBufSerializer) Decode(rawData []byte) (*packet.Message, error) {
 	var (
 		protoMessage = packet.StorePublishMessage{}
 		bf           = pool.ByteBufferPool.Get()
@@ -72,13 +72,12 @@ func (p *ProtoBufSerializer) Decode(rawData []byte) (*packet.PublishMessage, err
 	if ctl, err := packets.ReadPacket(bf); err != nil {
 		return nil, err
 	} else {
-		return &packet.PublishMessage{
+		return &packet.Message{
 			ClientID:      protoMessage.ClientID,
 			MessageID:     protoMessage.MessageID,
 			PublishPacket: ctl.Content.(*packets.Publish),
 			PubReceived:   protoMessage.PubReceived,
-			FromSession:   protoMessage.FromSession,
-			TimeStamp:     protoMessage.TimeStamp,
+			Timestamp:     protoMessage.TimeStamp,
 			ExpiredTime:   protoMessage.ExpiredTime,
 			Will:          protoMessage.Will,
 		}, nil

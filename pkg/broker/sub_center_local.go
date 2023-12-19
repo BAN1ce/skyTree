@@ -4,6 +4,7 @@ import (
 	"github.com/BAN1ce/Tree/proto"
 	"github.com/BAN1ce/Tree/state/api"
 	"github.com/BAN1ce/Tree/state/store"
+	"github.com/BAN1ce/skyTree/pkg/utils"
 	"github.com/eclipse/paho.golang/packets"
 )
 
@@ -19,11 +20,21 @@ func NewLocalSubCenter() *LocalSubCenter {
 func (l *LocalSubCenter) CreateSub(clientID string, topics []packets.SubOptions) error {
 	var topicsRequest = make(map[string]*proto.SubOption)
 	for _, opt := range topics {
-		topicsRequest[opt.Topic] = &proto.SubOption{
-			QoS:               int32(opt.QoS),
-			NoLocal:           opt.NoLocal,
-			RetainAsPublished: opt.RetainAsPublished,
+		var (
+			shareTopic string
+			subOption  = &proto.SubOption{
+				QoS:               int32(opt.QoS),
+				NoLocal:           opt.NoLocal,
+				RetainAsPublished: opt.RetainAsPublished,
+			}
+		)
+		if utils.IsShareTopic(opt.Topic) {
+			subOption.Share = true
+			subOption.ShareName = opt.Topic
+			_, shareTopic = utils.ParseShareTopic(opt.Topic)
+			topicsRequest[shareTopic] = subOption
 		}
+		topicsRequest[opt.Topic] = subOption
 	}
 
 	_, err := l.state.HandleSubRequest(&proto.SubRequest{

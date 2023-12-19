@@ -10,6 +10,7 @@ type KeyValueStore interface {
 	ReadKey(ctx context.Context, key string) (string, bool, error)
 	DeleteKey(ctx context.Context, key string) error
 	ReadPrefixKey(ctx context.Context, prefix string) (map[string]string, error)
+	DeletePrefixKey(ctx context.Context, prefix string) error
 }
 
 type KeyValueStoreWithTimeout struct {

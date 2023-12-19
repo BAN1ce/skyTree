@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 type Broker struct {
 	ConnectAckProperty
 }
@@ -19,4 +21,14 @@ type ConnectAckProperty struct {
 	ServerReference                 string `json:"server_reference"`
 	AuthenticationMethod            string `json:"authentication_method"`
 	AuthenticationData              string `json:"authentication_data"`
+}
+
+type MessageRetry struct {
+	MaxRetryCount int           `json:"max_retry_count"`
+	Interval      time.Duration `json:"interval"`
+	MaxTimeout    time.Duration `json:"max_timeout"`
+}
+
+type Store struct {
+	Dir string
 }

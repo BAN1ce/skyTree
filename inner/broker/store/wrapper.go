@@ -3,33 +3,39 @@ package store
 import (
 	"bytes"
 	"context"
+	"github.com/BAN1ce/skyTree/inner/broker/message_source"
 	event2 "github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
-	"github.com/BAN1ce/skyTree/pkg/errs"
 	packet2 "github.com/BAN1ce/skyTree/pkg/packet"
 	"go.uber.org/zap"
 )
 
 // Wrapper is a wrapper of pkg.Store
 type Wrapper struct {
+	store broker.TopicMessageStore
+	event broker.MessageStoreEvent
 }
 
-func NewStoreWrapper() *Wrapper {
-	return &Wrapper{}
+func NewStoreWrapper(store broker.TopicMessageStore, event broker.MessageStoreEvent) *Wrapper {
+	return &Wrapper{
+		store: store,
+		event: event,
+	}
 }
 
 // StorePublishPacket stores the published packet to store
 // if topics is empty, return error
 // topics include the origin topic and the topic of the wildcard subscription
 // and emit store event
-func (s *Wrapper) StorePublishPacket(topics map[string]int32, packet *packet2.PublishMessage) (messageID string, err error) {
+func (w *Wrapper) StorePublishPacket(topics map[string]int32, packet *packet2.Message) (messageID string, err error) {
 	var (
 		// there doesn't use bytes.BufferPool, because the store maybe async
 		encodedData = bytes.NewBuffer(nil)
 	)
 	if len(topics) == 0 {
-		return "", errs.ErrStoreTopicsEmpty
+		logger.Logger.Info("store publish packet with empty topics")
+		return "", nil
 	}
 	// publish packet encode to bytes
 	if err := broker.Encode(DefaultSerializerVersion, packet, encodedData); err != nil {
@@ -38,11 +44,11 @@ func (s *Wrapper) StorePublishPacket(topics map[string]int32, packet *packet2.Pu
 
 	for topic := range topics {
 		// store message bytes
-		messageID, err = DefaultMessageStore.CreatePacket(topic, encodedData.Bytes())
+		messageID, err = w.store.CreatePacket(topic, encodedData.Bytes())
 		if err != nil {
-			logger.Logger.Error("create packet to store error = ", zap.Error(err), zap.String("store", topic))
+			logger.Logger.Error("create packet to store error = ", zap.Error(err), zap.String("topic", topic))
 		} else {
-			logger.Logger.Debug("create packet to store success", zap.String("store", topic), zap.String("messageID", messageID))
+			logger.Logger.Debug("create packet to store success", zap.String("topic", topic), zap.String("messageID", messageID))
 			// emit store event
 			event2.GlobalEvent.EmitStoreMessage(topic, messageID)
 		}
@@ -55,13 +61,13 @@ func (s *Wrapper) StorePublishPacket(topics map[string]int32, packet *packet2.Pu
 // if include is true, read from the startMessageID, otherwise read from the next message of startMessageID
 // if include is true and startMessageID was the latest message, waiting for the next message by listening store event
 // read message from store and write to writer
-func ReadPublishMessage(ctx context.Context, topic, startMessageID string, size int, include bool, writer func(message *packet2.PublishMessage)) (err error) {
+func (w *Wrapper) ReadPublishMessage(ctx context.Context, topic, startMessageID string, size int, include bool, writer func(message *packet2.Message)) (err error) {
 	// FIXME: If consecutive errors, consider downgrading options
 	var (
 		total int
 	)
 	if startMessageID != "" {
-		if err = readStoreWriteToWriter(ctx, topic, startMessageID, size, include, writer); err != nil {
+		if err = w.readStoreWriteToWriter(ctx, topic, startMessageID, size, include, writer); err != nil {
 			return
 		} else if total != 0 {
 			return
@@ -80,7 +86,7 @@ func ReadPublishMessage(ctx context.Context, topic, startMessageID string, size 
 		if startMessageID == "" {
 			startMessageID = id
 		}
-		if err = readStoreWriteToWriter(ctx1, topic, startMessageID, size, true, writer); err != nil {
+		if err = w.readStoreWriteToWriter(ctx1, topic, startMessageID, size, true, writer); err != nil {
 			logger.Logger.Error("readStoreWriteToWriter error", zap.Error(err))
 		}
 		cancel()
@@ -88,16 +94,16 @@ func ReadPublishMessage(ctx context.Context, topic, startMessageID string, size 
 	if ctx1.Err() != nil {
 		return
 	}
-	DefaultMessageStoreEvent.CreateListenMessageStoreEvent(topic, f)
+	w.event.CreateListenMessageStoreEvent(topic, f)
 	<-ctx1.Done()
-	DefaultMessageStoreEvent.DeleteListenMessageStoreEvent(topic, f)
+	w.event.DeleteListenMessageStoreEvent(topic, f)
 	return
 }
 
 // readStoreWriteToWriter read message from store and write to writer
-func readStoreWriteToWriter(ctx context.Context, topic string, id string, size int, include bool, writer func(message *packet2.PublishMessage)) error {
+func (w *Wrapper) readStoreWriteToWriter(ctx context.Context, topic string, id string, size int, include bool, writer func(message *packet2.Message)) error {
 	var (
-		message, err = DefaultMessageStore.ReadTopicMessagesByID(ctx, topic, id, size, include)
+		message, err = w.store.ReadTopicMessagesByID(ctx, topic, id, size, include)
 	)
 	if err != nil {
 		return err
@@ -110,16 +116,16 @@ func readStoreWriteToWriter(ctx context.Context, topic string, id string, size i
 		zap.Int("got message size", len(message)))
 	for _, m := range message {
 		if !m.Will {
-			writer(&m)
+			writer(m)
 		}
 	}
 	return nil
 }
 
-func ReadTopicWillMessage(ctx context.Context, topic, messageID string, writer func(message *packet2.PublishMessage)) error {
+func (w *Wrapper) ReadTopicWillMessage(ctx context.Context, topic, messageID string, writer func(message *packet2.Message)) error {
 	var (
 		// TODO: limit maybe not enough
-		message, err = DefaultMessageStore.ReadTopicMessagesByID(ctx, topic, messageID, 1, true)
+		message, err = w.store.ReadTopicMessagesByID(ctx, topic, messageID, 1, true)
 	)
 	if err != nil {
 		return err
@@ -129,12 +135,16 @@ func ReadTopicWillMessage(ctx context.Context, topic, messageID string, writer f
 		zap.Int("got message size", len(message)))
 	for _, m := range message {
 		if m.Will {
-			writer(&m)
+			writer(m)
 		}
 	}
 	return nil
 }
 
-func DeleteTopicMessageID(ctx context.Context, topic, messageID string) error {
-	return DefaultMessageStore.DeleteTopicMessageID(ctx, topic, messageID)
+func (w *Wrapper) DeleteTopicMessageID(ctx context.Context, topic, messageID string) error {
+	return w.store.DeleteTopicMessageID(ctx, topic, messageID)
+}
+
+func (w *Wrapper) MakeMessageSource(topic string) broker.MessageSource {
+	return message_source.NewStoreSource(topic, w.store, w.event)
 }

@@ -1,0 +1,93 @@
+package api
+
+import (
+	"context"
+	"github.com/BAN1ce/skyTree/api/base"
+	"github.com/BAN1ce/skyTree/api/session"
+	"github.com/BAN1ce/skyTree/api/store"
+	_ "github.com/BAN1ce/skyTree/docs"
+	"github.com/BAN1ce/skyTree/inner/broker/core"
+	"github.com/BAN1ce/skyTree/logger"
+	broker2 "github.com/BAN1ce/skyTree/pkg/broker"
+	session2 "github.com/BAN1ce/skyTree/pkg/broker/session"
+	"github.com/labstack/echo/v4"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	echoSwagger "github.com/swaggo/echo-swagger"
+	"go.uber.org/zap"
+)
+
+type Option func(*API)
+
+func WithClientManager(manager *core.ClientManager) Option {
+	return func(api *API) {
+		api.manager = manager
+	}
+}
+
+func WithSessionManager(sessionManager session2.Manager) Option {
+	return func(api *API) {
+		api.sessionManager = sessionManager
+	}
+}
+
+func WithStore(store broker2.Store) Option {
+	return func(api *API) {
+		api.store = store
+	}
+}
+
+type API struct {
+	addr           string
+	httpServer     *echo.Echo
+	apiV1          *echo.Group
+	manager        *core.ClientManager
+	store          broker2.Store
+	sessionManager session2.Manager
+}
+
+func NewAPI(addr string, option ...Option) *API {
+	api := &API{
+		addr: addr,
+	}
+	for _, opt := range option {
+		opt(api)
+	}
+	return api
+}
+func (a *API) Start(ctx context.Context) error {
+	a.httpServer = echo.New()
+	a.httpServer.Debug = false
+	a.httpServer.HideBanner = true
+	a.httpServer.HTTPErrorHandler = func(err error, ctx echo.Context) {
+		if err := ctx.JSON(500, base.WithError(err)); err != nil {
+			logger.Logger.Error("http error handler error", zap.Error(err))
+		}
+	}
+	a.route()
+	return a.httpServer.Start(a.addr)
+}
+
+func (a *API) route() {
+	a.httpServer.GET("/swagger/*", echoSwagger.WrapHandler)
+	a.httpServer.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
+	a.apiV1 = a.httpServer.Group("/api/v1")
+	a.apiV1.GET("/ping", func(ctx echo.Context) error {
+		return ctx.String(200, "pong")
+	})
+	a.storeAPI()
+	a.sessionAPI()
+}
+
+func (a *API) storeAPI() {
+	ctr := store.NewController(a.store)
+	a.apiV1.GET("/store/message", ctr.Get)
+	a.apiV1.GET("/store/message/:id", ctr.Info)
+}
+func (a *API) sessionAPI() {
+	ctr := session.NewController(a.sessionManager)
+	a.apiV1.GET("/session/:client_id", ctr.Info)
+
+}
+func (a *API) Name() string {
+	return "api"
+}

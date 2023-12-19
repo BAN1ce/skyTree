@@ -6,6 +6,7 @@ import (
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/db"
+	"github.com/BAN1ce/skyTree/pkg/errs"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/google/uuid"
 	"github.com/nutsdb/nutsdb"
@@ -15,14 +16,18 @@ import (
 	"time"
 )
 
+const kvBucketName = "kvBucket"
+
 type Local struct {
-	db *nutsdb.DB
+	db       *nutsdb.DB
+	kvBucket string
 }
 
 func NewLocalStore(options nutsdb.Options, option ...nutsdb.Option) *Local {
 	var (
 		store = new(Local)
 	)
+	store.kvBucket = kvBucketName
 	db.InitNutsDB(options, option...)
 	store.db = db.GetNutsDB()
 	if store.db == nil {
@@ -44,9 +49,9 @@ func (s *Local) CreatePacket(topic string, value []byte) (id string, err error) 
 	return
 }
 
-func (s *Local) ReadFromTimestamp(ctx context.Context, topic string, timestamp time.Time, limit int) ([]packet.PublishMessage, error) {
+func (s *Local) ReadFromTimestamp(ctx context.Context, topic string, timestamp time.Time, limit int) ([]*packet.Message, error) {
 	var (
-		messages []packet.PublishMessage
+		messages []*packet.Message
 		err      error
 	)
 	err = s.db.View(func(tx *nutsdb.Tx) error {
@@ -63,9 +68,9 @@ func (s *Local) ReadFromTimestamp(ctx context.Context, topic string, timestamp t
 
 }
 
-func (s *Local) ReadTopicMessagesByID(ctx context.Context, topic, id string, limit int, include bool) ([]packet.PublishMessage, error) {
+func (s *Local) ReadTopicMessagesByID(ctx context.Context, topic, id string, limit int, include bool) ([]*packet.Message, error) {
 	var (
-		messages []packet.PublishMessage
+		messages []*packet.Message
 		err      error
 	)
 	err = s.db.View(func(tx *nutsdb.Tx) error {
@@ -109,9 +114,9 @@ func (s *Local) DeleteBeforeID(id string) {
 	panic("implement me")
 }
 
-func nutsDBValuesBeMessages(values []*zset.SortedSetNode, topic string) []packet.PublishMessage {
+func nutsDBValuesBeMessages(values []*zset.SortedSetNode, topic string) []*packet.Message {
 	var (
-		messages []packet.PublishMessage
+		messages []*packet.Message
 	)
 	for _, v := range values {
 		if pubMessage, err := broker.Decode(v.Value); err != nil {
@@ -120,11 +125,98 @@ func nutsDBValuesBeMessages(values []*zset.SortedSetNode, topic string) []packet
 		} else {
 			if pubMessage.ExpiredTime == 0 || pubMessage.ExpiredTime > time.Now().Unix() {
 				pubMessage.MessageID = v.Key()
-				messages = append(messages, *pubMessage)
+				messages = append(messages, pubMessage)
 			} else {
 				logger.Logger.Debug("read from Local decode message expired", zap.String("topic", topic), zap.String("messageID", pubMessage.MessageID))
 			}
 		}
 	}
 	return messages
+}
+
+//
+// Key Value Store
+//
+
+func (s *Local) PutKey(ctx context.Context, key, value string) error {
+	var err error
+	logger.Logger.Debug("store put key", zap.String("key", key), zap.String("value", value))
+	if err = s.db.Update(func(tx *nutsdb.Tx) error {
+		return tx.SAdd(s.kvBucket, []byte(key), []byte(value))
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Local) ReadKey(ctx context.Context, key string) (string, bool, error) {
+	var (
+		value string
+		err   error
+		ok    bool
+	)
+	logger.Logger.Debug("store read key", zap.String("key", key))
+	if err = s.db.View(func(tx *nutsdb.Tx) error {
+		if v, err := tx.SMembers(s.kvBucket, []byte(key)); err != nil {
+			return err
+		} else {
+			if len(v) > 0 {
+				ok = true
+				value = string(v[0])
+			}
+			return nil
+		}
+	}); err != nil {
+		return "", false, err
+	}
+	return value, ok, nil
+}
+
+func (s *Local) DeleteKey(ctx context.Context, key string) error {
+	logger.Logger.Debug("store delete key", zap.String("key", key))
+	if err := s.db.Update(func(tx *nutsdb.Tx) error {
+		return tx.SRem(s.kvBucket, []byte(key))
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Local) ReadPrefixKey(ctx context.Context, prefix string) (map[string]string, error) {
+	var (
+		values = make(map[string]string)
+		err    error
+	)
+	logger.Logger.Debug("store read key", zap.String("key", prefix))
+	if err = s.db.View(func(tx *nutsdb.Tx) error {
+		// TODO: limit number set 9999, it's dangerous
+		if entries, _, err := tx.PrefixScan(s.kvBucket, []byte(prefix), 0, 9999); err != nil {
+			return err
+		} else {
+			for _, entry := range entries {
+				values[string(entry.Key)] = string(entry.Value)
+			}
+			return nil
+		}
+	}); err != nil {
+		if errors.Is(err, nutsdb.ErrPrefixScan) {
+			return nil, errs.ErrStoreKeyNotFound
+		}
+		return nil, err
+	}
+	return values, nil
+}
+
+func (s *Local) DeletePrefixKey(ctx context.Context, prefix string) error {
+	m, err := s.ReadPrefixKey(ctx, prefix)
+	if err != nil {
+		return err
+	}
+
+	for k := range m {
+		if tmp := s.DeleteKey(ctx, k); err != nil {
+			err = errors.Join(err, tmp)
+		}
+	}
+	return err
 }

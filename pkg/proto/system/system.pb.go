@@ -86,7 +86,7 @@ func (m *Session) GetLastActiveTime() int64 {
 }
 
 type SessionTopic struct {
-	Topic                string   `protobuf:"bytes,1,opt,name=Topic,proto3" json:"Topic,omitempty"`
+	Topic                string   `protobuf:"bytes,1,opt,name=topic,proto3" json:"topic,omitempty"`
 	QoS                  int32    `protobuf:"varint,2,opt,name=QoS,proto3" json:"QoS,omitempty"`
 	UnAckMessageID       []string `protobuf:"bytes,3,rep,name=UnAckMessageID,proto3" json:"UnAckMessageID,omitempty"`
 	UnReceivePacketID    []uint32 `protobuf:"varint,4,rep,packed,name=UnReceivePacketID,proto3" json:"UnReceivePacketID,omitempty"`
@@ -819,7 +819,7 @@ func (m *SessionTopic) Unmarshal(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Topic", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field topic", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
