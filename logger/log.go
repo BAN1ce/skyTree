@@ -11,7 +11,7 @@ var Logger *zap.Logger
 func init() {
 	var (
 		zapConfig = zap.Config{
-			Level:       zap.NewAtomicLevelAt(zap.DebugLevel),
+			Level:       zap.NewAtomicLevelAt(zap.InfoLevel),
 			Development: false,
 			Sampling: &zap.SamplingConfig{
 				Initial:    100,

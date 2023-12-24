@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"github.com/BAN1ce/skyTree/config"
 	"github.com/BAN1ce/skyTree/inner/broker/client"
+	"github.com/BAN1ce/skyTree/inner/broker/monitor"
 	"github.com/BAN1ce/skyTree/inner/broker/server"
 	"github.com/BAN1ce/skyTree/inner/broker/share"
 	"github.com/BAN1ce/skyTree/inner/broker/state"
-	"github.com/BAN1ce/skyTree/inner/broker/store"
+	"github.com/BAN1ce/skyTree/inner/broker/store/message"
 	"github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/logger"
@@ -44,21 +45,23 @@ type brokerHandler interface {
 	Handle(broker *Broker, client *client.Client, rawPacket *packets.ControlPacket) (err error)
 }
 type Broker struct {
-	ctx            context.Context
-	server         *server.Server
-	state          *state.State
-	userAuth       middleware.UserAuth
-	subTree        broker.SubCenter
-	store          *store.Wrapper
-	clientManager  *ClientManager
-	sessionManager session.Manager
-	publishPool    *pool.Publish
-	publishRetry   facade.RetrySchedule
-	preMiddleware  map[byte][]middleware.PacketMiddleware
-	handlers       *Handlers
-	mux            sync.Mutex
-	shareManager   *share.Manager
-	plugins        *plugin.Plugins
+	ctx                    context.Context
+	server                 *server.Server
+	state                  *state.State
+	userAuth               middleware.UserAuth
+	subTree                broker.SubCenter
+	messageStore           *message.Wrapper
+	keyStore               broker.KeyStore
+	clientManager          *ClientManager
+	sessionManager         session.Manager
+	publishPool            *pool.Publish
+	publishRetry           facade.RetrySchedule
+	preMiddleware          map[byte][]middleware.PacketMiddleware
+	handlers               *Handlers
+	mux                    sync.Mutex
+	shareManager           *share.Manager
+	plugins                *plugin.Plugins
+	clientKeepAliveMonitor *monitor.KeepAlive
 }
 
 func NewBroker(option ...Option) *Broker {
@@ -79,16 +82,26 @@ func NewBroker(option ...Option) *Broker {
 	for _, opt := range option {
 		opt(b)
 	}
+	b.clientKeepAliveMonitor = monitor.NewKeepAlive(b.keyStore, 30*time.Second, func(uid []string) {
+		for _, id := range uid {
+			b.DeleteClient(id)
+		}
+	})
 
 	return b
 }
 
 func (b *Broker) Name() string {
-	return "store"
+	return "messageStore"
 }
 
 func (b *Broker) Start(ctx context.Context) error {
 	b.ctx = ctx
+	go func() {
+		if err := b.clientKeepAliveMonitor.Start(b.ctx); err != nil {
+			logger.Logger.Error("client keep alive monitor start error", zap.Error(err))
+		}
+	}()
 	if err := b.server.Start(); err != nil {
 		return err
 	}
@@ -119,7 +132,7 @@ func (b *Broker) acceptConn() {
 
 // ------------------------------------ handle client MQTT PublishPacket ------------------------------------//
 
-func (b *Broker) HandlePacket(client *client.Client, packet *packets.ControlPacket) (err error) {
+func (b *Broker) HandlePacket(ctx context.Context, packet *packets.ControlPacket, client *client.Client) (err error) {
 	// TODO : check MQTT version
 	if err = b.executePreMiddleware(client, packet); err != nil {
 		return
@@ -180,14 +193,19 @@ func (b *Broker) writePacket(client *client.Client, packet packets.Packet) {
 func (b *Broker) CreateClient(client *client.Client) {
 	b.mux.Lock()
 	b.clientManager.CreateClient(client)
-	event.GlobalEvent.EmitClientOnline(client.GetID())
+	event.GlobalEvent.EmitClientOnline(client.GetUid())
 	b.mux.Unlock()
 
 }
-func (b *Broker) DeleteClient(clientID string) {
+func (b *Broker) DeleteClient(uid string) {
 	b.mux.Lock()
-	b.clientManager.DeleteClient(clientID)
-	event.GlobalEvent.EmitClientOffline(clientID)
+	var ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	b.clientManager.DeleteClient(uid)
+	if err := b.clientKeepAliveMonitor.DeleteClient(ctx, uid); err != nil {
+		logger.Logger.Error("delete client keep alive monitor error", zap.Error(err), zap.String("uid", uid))
+	}
+	event.GlobalEvent.EmitClientOffline(uid)
 	b.mux.Unlock()
 }
 
@@ -217,8 +235,8 @@ func (b *Broker) NotifyWillMessage(willMessage *session.WillMessage) {
 		logger.Logger.Info("notify will message, no client subscribe topic", zap.String("topic", willMessage.Topic))
 		return
 	}
-	if _, err := b.store.StorePublishPacket(clients, publishMessage); err != nil {
-		logger.Logger.Error("store will message publish packet error", zap.Error(err), zap.String("topic", willMessage.Topic))
+	if _, err := b.messageStore.StorePublishPacket(clients, publishMessage); err != nil {
+		logger.Logger.Error("messageStore will message publish packet error", zap.Error(err), zap.String("topic", willMessage.Topic))
 		return
 	}
 
@@ -240,7 +258,7 @@ func (b *Broker) ReadTopicRetainWillMessage(topic string) []*packet2.Message {
 		if _, online := b.clientManager.ReadClient(clientID); online {
 			continue
 		}
-		if err := b.store.ReadPublishMessage(ctx, topic, id, 1, true, func(message *packet2.Message) {
+		if err := b.messageStore.ReadPublishMessage(ctx, topic, id, 1, true, func(message *packet2.Message) {
 			willPublishMessage = append(willPublishMessage, message)
 		}); err != nil {
 			logger.Logger.Error("read will message error", zap.Error(err), zap.String("topic", topic), zap.String("messageID", id))
@@ -261,7 +279,7 @@ func (b *Broker) ReadTopicRetainMessage(topic string) []*packet2.Message {
 		return nil
 	}
 	for _, id := range messageID {
-		if err := b.store.ReadPublishMessage(ctx, topic, id, 1, true, func(message *packet2.Message) {
+		if err := b.messageStore.ReadPublishMessage(ctx, topic, id, 1, true, func(message *packet2.Message) {
 			retainMessage = append(retainMessage, message)
 		}); err != nil {
 			logger.Logger.Error("read retain message error", zap.Error(err), zap.String("topic", topic), zap.String("messageID", id))

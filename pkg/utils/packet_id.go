@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"strconv"
@@ -56,7 +57,7 @@ func (p *PacketIDFactory) Generate() uint16 {
 }
 
 func PacketIDToString(id uint16) string {
-	return string(id)
+	return fmt.Sprintf("%d", id)
 }
 
 func StringToPacketID(id string) uint16 {

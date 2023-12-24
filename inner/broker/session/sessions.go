@@ -12,8 +12,8 @@ type Sessions struct {
 
 // NewSessions returns a new session manager.
 // The session manager is responsible for managing the sessions.
-// Parameter store broker.KeyValueStore is used to store the session data. if single node, you can use memory store.
-func NewSessions(store broker.KeyValueStore) *Sessions {
+// Parameter store broker.HashStore is used to store the session data. if single node, you can use memory store.
+func NewSessions(store broker.KeyStore) *Sessions {
 	return &Sessions{store: broker.NewKeyValueStoreWithTimout(store, 3*time.Second)}
 }
 

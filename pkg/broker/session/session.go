@@ -61,6 +61,27 @@ type ConnectProperties struct {
 	CreatedTime int64 `json:"created_time"`
 }
 
+func (c *ConnectProperties) GetTopicAliasMax() (int64, bool) {
+	if c.TopicAliasMaximum == nil {
+		return 0, false
+	}
+	return int64(*c.TopicAliasMaximum), true
+}
+
+func (c *ConnectProperties) GetRequestResponseInfo() (byte, bool) {
+	if c.RequestResponseInfo == nil {
+		return 0, false
+	}
+	return *c.RequestProblemInfo, true
+}
+
+func (c *ConnectProperties) GetRequestProblemInfo() (byte, bool) {
+	if c.RequestProblemInfo == nil {
+		return 0, false
+	}
+	return *c.RequestProblemInfo, true
+}
+
 func (c *ConnectProperties) IsExpired() bool {
 	if c.SessionExpiryInterval == nil {
 		return false

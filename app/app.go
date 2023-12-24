@@ -10,6 +10,8 @@ import (
 	"github.com/BAN1ce/skyTree/inner/broker/share"
 	"github.com/BAN1ce/skyTree/inner/broker/state"
 	"github.com/BAN1ce/skyTree/inner/broker/store"
+	"github.com/BAN1ce/skyTree/inner/broker/store/key"
+	"github.com/BAN1ce/skyTree/inner/broker/store/message"
 	"github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/inner/metric"
@@ -53,7 +55,7 @@ func NewApp() *App {
 		clientManager = core.NewClientManager()
 	)
 	var (
-		localNutsDBStore = store.NewLocalStore(nutsdb.Options{
+		localNutsDBStore = key.NewLocalStore(nutsdb.Options{
 			EntryIdxMode: nutsdb.HintKeyValAndRAMIdxMode,
 			SegmentSize:  nutsdb.MB * 256,
 			NodeNum:      1,
@@ -62,7 +64,7 @@ func NewApp() *App {
 		}, nutsdb.WithDir("./data/nutsdb"))
 
 		//keyVStore = localNutsDBStore
-		keyVStore = store.NewRedis()
+		keyVStore = key.NewRedis()
 	)
 	var (
 		sessionManager = session.NewSessions(keyVStore)
@@ -70,7 +72,7 @@ func NewApp() *App {
 	event.Boot()
 	store.Boot(localNutsDBStore, event.GlobalEvent)
 	var (
-		storeWrapper     = store.NewStoreWrapper(localNutsDBStore, event.GlobalEvent)
+		storeWrapper     = message.NewStoreWrapper(localNutsDBStore, event.GlobalEvent)
 		shareTopicManger = share.NewManager(storeWrapper)
 	)
 
@@ -81,10 +83,11 @@ func NewApp() *App {
 		publishRetrySchedule = facade.SinglePublishRetry()
 		app                  = &App{
 			brokerCore: core.NewBroker(
+				core.WithKeyStore(keyVStore),
 				core.WithPlugins(plugin.NewDefaultPlugin()),
 				core.WithPublishRetry(publishRetrySchedule),
-				core.WithStore(storeWrapper),
-				core.WithState(state.NewState(localNutsDBStore)),
+				core.WithMessageStore(storeWrapper),
+				core.WithState(state.NewState(keyVStore)),
 				core.WithSessionManager(sessionManager),
 				core.WithClientManager(clientManager),
 				core.WithShareManager(shareTopicManger),

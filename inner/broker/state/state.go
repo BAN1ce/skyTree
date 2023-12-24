@@ -9,7 +9,7 @@ type State struct {
 	store *broker.KeyValueStoreWithTimeout
 }
 
-func NewState(store broker.KeyValueStore) *State {
+func NewState(store broker.KeyStore) *State {
 	return &State{
 		store: broker.NewKeyValueStoreWithTimout(store, 3*time.Second),
 	}

@@ -30,7 +30,7 @@ func WithSessionManager(sessionManager session2.Manager) Option {
 	}
 }
 
-func WithStore(store broker2.Store) Option {
+func WithStore(store broker2.MessageStore) Option {
 	return func(api *API) {
 		api.store = store
 	}
@@ -41,7 +41,7 @@ type API struct {
 	httpServer     *echo.Echo
 	apiV1          *echo.Group
 	manager        *core.ClientManager
-	store          broker2.Store
+	store          broker2.MessageStore
 	sessionManager session2.Manager
 }
 

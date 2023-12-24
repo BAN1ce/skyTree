@@ -1,9 +1,10 @@
-package store
+package message
 
 import (
 	"bytes"
 	"context"
 	"github.com/BAN1ce/skyTree/inner/broker/message_source"
+	"github.com/BAN1ce/skyTree/inner/broker/store"
 	event2 "github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
@@ -11,16 +12,16 @@ import (
 	"go.uber.org/zap"
 )
 
-// Wrapper is a wrapper of pkg.Store
+// Wrapper is a wrapper of pkg.MessageStore
 type Wrapper struct {
-	store broker.TopicMessageStore
-	event broker.MessageStoreEvent
+	broker.TopicMessageStore
+	broker.MessageStoreEvent
 }
 
 func NewStoreWrapper(store broker.TopicMessageStore, event broker.MessageStoreEvent) *Wrapper {
 	return &Wrapper{
-		store: store,
-		event: event,
+		TopicMessageStore: store,
+		MessageStoreEvent: event,
 	}
 }
 
@@ -38,13 +39,13 @@ func (w *Wrapper) StorePublishPacket(topics map[string]int32, packet *packet2.Me
 		return "", nil
 	}
 	// publish packet encode to bytes
-	if err := broker.Encode(DefaultSerializerVersion, packet, encodedData); err != nil {
+	if err := broker.Encode(store.DefaultSerializerVersion, packet, encodedData); err != nil {
 		return "", err
 	}
 
 	for topic := range topics {
 		// store message bytes
-		messageID, err = w.store.CreatePacket(topic, encodedData.Bytes())
+		messageID, err = w.CreatePacket(topic, encodedData.Bytes())
 		if err != nil {
 			logger.Logger.Error("create packet to store error = ", zap.Error(err), zap.String("topic", topic))
 		} else {
@@ -94,16 +95,16 @@ func (w *Wrapper) ReadPublishMessage(ctx context.Context, topic, startMessageID 
 	if ctx1.Err() != nil {
 		return
 	}
-	w.event.CreateListenMessageStoreEvent(topic, f)
+	w.CreateListenMessageStoreEvent(topic, f)
 	<-ctx1.Done()
-	w.event.DeleteListenMessageStoreEvent(topic, f)
+	w.DeleteListenMessageStoreEvent(topic, f)
 	return
 }
 
 // readStoreWriteToWriter read message from store and write to writer
 func (w *Wrapper) readStoreWriteToWriter(ctx context.Context, topic string, id string, size int, include bool, writer func(message *packet2.Message)) error {
 	var (
-		message, err = w.store.ReadTopicMessagesByID(ctx, topic, id, size, include)
+		message, err = w.ReadTopicMessagesByID(ctx, topic, id, size, include)
 	)
 	if err != nil {
 		return err
@@ -125,7 +126,7 @@ func (w *Wrapper) readStoreWriteToWriter(ctx context.Context, topic string, id s
 func (w *Wrapper) ReadTopicWillMessage(ctx context.Context, topic, messageID string, writer func(message *packet2.Message)) error {
 	var (
 		// TODO: limit maybe not enough
-		message, err = w.store.ReadTopicMessagesByID(ctx, topic, messageID, 1, true)
+		message, err = w.ReadTopicMessagesByID(ctx, topic, messageID, 1, true)
 	)
 	if err != nil {
 		return err
@@ -142,9 +143,9 @@ func (w *Wrapper) ReadTopicWillMessage(ctx context.Context, topic, messageID str
 }
 
 func (w *Wrapper) DeleteTopicMessageID(ctx context.Context, topic, messageID string) error {
-	return w.store.DeleteTopicMessageID(ctx, topic, messageID)
+	return w.DeleteTopicMessageID(ctx, topic, messageID)
 }
 
 func (w *Wrapper) MakeMessageSource(topic string) broker.MessageSource {
-	return message_source.NewStoreSource(topic, w.store, w.event)
+	return message_source.NewStoreSource(topic, w.TopicMessageStore, w.MessageStoreEvent)
 }

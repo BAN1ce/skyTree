@@ -1,20 +1,40 @@
-package store
+package key
 
 import (
 	"context"
 	"errors"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
-	"github.com/BAN1ce/skyTree/pkg/db"
 	"github.com/BAN1ce/skyTree/pkg/errs"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/google/uuid"
 	"github.com/nutsdb/nutsdb"
 	"github.com/nutsdb/nutsdb/ds/zset"
 	"go.uber.org/zap"
+	"log"
 	"math"
 	"time"
 )
+
+var (
+	nutsDB *nutsdb.DB
+)
+
+func initLocalDB(options nutsdb.Options, option ...nutsdb.Option) {
+	var (
+		err error
+	)
+	nutsDB, err = nutsdb.Open(
+		// nutsdb.DefaultOptions,
+		// TODO: support config
+		// nutsdb.WithDir("./data/nutsdb"),
+		options,
+		option...,
+	)
+	if err != nil {
+		log.Fatalln("open db error: ", err)
+	}
+}
 
 const kvBucketName = "kvBucket"
 
@@ -28,8 +48,8 @@ func NewLocalStore(options nutsdb.Options, option ...nutsdb.Option) *Local {
 		store = new(Local)
 	)
 	store.kvBucket = kvBucketName
-	db.InitNutsDB(options, option...)
-	store.db = db.GetNutsDB()
+	initLocalDB(options, option...)
+	store.db = nutsDB
 	if store.db == nil {
 		logger.Logger.Panic("local db is nil")
 	}
@@ -135,7 +155,7 @@ func nutsDBValuesBeMessages(values []*zset.SortedSetNode, topic string) []*packe
 }
 
 //
-// Key Value Store
+// Key Value MessageStore
 //
 
 func (s *Local) PutKey(ctx context.Context, key, value string) error {

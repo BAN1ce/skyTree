@@ -3,13 +3,16 @@ package core
 import (
 	"github.com/BAN1ce/skyTree/inner/broker/share"
 	"github.com/BAN1ce/skyTree/inner/broker/state"
-	"github.com/BAN1ce/skyTree/inner/broker/store"
+	"github.com/BAN1ce/skyTree/inner/broker/store/message"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/broker/plugin"
 	"github.com/BAN1ce/skyTree/pkg/broker/session"
 	"github.com/BAN1ce/skyTree/pkg/middleware"
 )
+
+type Options struct {
+}
 
 type Option func(*Broker)
 
@@ -61,9 +64,9 @@ func WithSessionManager(manager session.Manager) Option {
 	}
 }
 
-func WithStore(store *store.Wrapper) Option {
+func WithMessageStore(store *message.Wrapper) Option {
 	return func(broker *Broker) {
-		broker.store = store
+		broker.messageStore = store
 	}
 }
 
@@ -76,5 +79,11 @@ func WithPublishRetry(schedule facade.RetrySchedule) Option {
 func WithPlugins(plugins *plugin.Plugins) Option {
 	return func(broker *Broker) {
 		broker.plugins = plugins
+	}
+}
+
+func WithKeyStore(store broker.KeyStore) Option {
+	return func(b *Broker) {
+		b.keyStore = store
 	}
 }

@@ -1,11 +1,13 @@
 package client
 
 import (
+	"context"
 	"fmt"
 	"github.com/BAN1ce/skyTree/inner/broker/client/topic"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker/session"
 	topic2 "github.com/BAN1ce/skyTree/pkg/broker/topic"
+	"github.com/BAN1ce/skyTree/pkg/utils"
 	"github.com/eclipse/paho.golang/packets"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -21,7 +23,7 @@ func newInnerHandler(client *Client) *InnerHandler {
 	}
 }
 
-func (i *InnerHandler) HandlePacket(client *Client, packet *packets.ControlPacket) error {
+func (i *InnerHandler) HandlePacket(ctx context.Context, packet *packets.ControlPacket, client *Client) error {
 	var (
 		err error
 	)
@@ -31,6 +33,8 @@ func (i *InnerHandler) HandlePacket(client *Client, packet *packets.ControlPacke
 		if err = i.HandleConnect(connectPacket); err != nil {
 			logger.Logger.Warn("handle connect error: ", zap.Error(err), zap.String("client", client.MetaString()))
 		}
+	case packets.PUBLISH:
+		// do nothing
 
 	case packets.SUBSCRIBE:
 		subscribePacket := packet.Content.(*packets.Subscribe)
@@ -61,6 +65,7 @@ func (i *InnerHandler) HandlePacket(client *Client, packet *packets.ControlPacke
 }
 
 func (i *InnerHandler) HandleConnect(connectPacket *packets.Connect) error {
+	logger.Logger.Debug("handle connect", zap.String("clientID", i.client.GetID()), zap.String("uid", i.client.GetUid()))
 	i.client.mux.Lock()
 	defer i.client.mux.Unlock()
 	sessionConnectProp := session.NewConnectProperties(connectPacket.Properties)
@@ -70,19 +75,26 @@ func (i *InnerHandler) HandleConnect(connectPacket *packets.Connect) error {
 	}
 	i.recoverTopicFromSession()
 
-	if !connectPacket.WillFlag {
-		return nil
+	var (
+		windowSize = -1
+	)
+	if connectPacket.Properties.ReceiveMaximum != nil && *connectPacket.Properties.ReceiveMaximum > 0 {
+		windowSize = int(*connectPacket.Properties.ReceiveMaximum)
 	}
-
-	if err := i.client.setWill(&session.WillMessage{
-		Topic:       connectPacket.WillTopic,
-		QoS:         int(connectPacket.WillQOS),
-		Property:    &session.WillProperties{Properties: connectPacket.WillProperties},
-		Retain:      false,
-		Payload:     connectPacket.WillMessage,
-		DelayTaskID: uuid.NewString(),
-	}); err != nil {
-		return err
+	if windowSize == -1 {
+		i.client.publishBucket = utils.NewBucket(windowSize)
+	}
+	if connectPacket.WillFlag {
+		if err := i.client.setWill(&session.WillMessage{
+			Topic:       connectPacket.WillTopic,
+			QoS:         int(connectPacket.WillQOS),
+			Property:    &session.WillProperties{Properties: connectPacket.WillProperties},
+			Retain:      false,
+			Payload:     connectPacket.WillMessage,
+			DelayTaskID: uuid.NewString(),
+		}); err != nil {
+			return err
+		}
 	}
 
 	var conAck = packets.NewControlPacket(packets.CONNACK).Content.(*packets.Connack)

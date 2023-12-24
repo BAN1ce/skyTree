@@ -2,6 +2,7 @@ package core
 
 import (
 	"github.com/BAN1ce/skyTree/inner/broker/client"
+	"github.com/BAN1ce/skyTree/pkg/utils"
 	"github.com/eclipse/paho.golang/packets"
 )
 
@@ -13,5 +14,5 @@ func NewPingHandler() *PingHandler {
 }
 
 func (p *PingHandler) Handle(broker *Broker, client *client.Client, rawPacket *packets.ControlPacket) (err error) {
-	return err
+	return broker.clientKeepAliveMonitor.SetClientAliveTime(client.UID, utils.NextAliveTime(int64(client.GetKeepAliveTime().Seconds())))
 }

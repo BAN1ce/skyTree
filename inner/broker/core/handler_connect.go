@@ -7,6 +7,7 @@ import (
 	session2 "github.com/BAN1ce/skyTree/pkg/broker/session"
 	"github.com/BAN1ce/skyTree/pkg/errs"
 	"github.com/BAN1ce/skyTree/pkg/state"
+	"github.com/BAN1ce/skyTree/pkg/utils"
 	"github.com/eclipse/paho.golang/packets"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -46,7 +47,8 @@ func (c *ConnectHandler) Handle(broker *Broker, client *client2.Client, rawPacke
 		return err
 	}
 	broker.CreateClient(client)
-	return err
+
+	return broker.clientKeepAliveMonitor.SetClientAliveTime(client.UID, utils.NextAliveTime(int64(connectPacket.KeepAlive)))
 }
 
 func (c *ConnectHandler) handleUsernamePassword(_ *Broker, _ *client2.Client, packet *packets.Connect, conAck *packets.Connack) error {
@@ -69,6 +71,7 @@ func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client
 		err        error
 		session    session2.Session
 		exists     bool
+		willCreate bool
 	)
 	if clientID == "" && !cleanStart {
 		connAck.ReasonCode = packets.ConnackInvalidClientID
@@ -78,7 +81,6 @@ func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client
 		clientID = uuid.New().String()
 	}
 
-	var willCreate bool
 	if cleanStart {
 		//  release old session
 		broker.ReleaseSession(clientID)
@@ -87,22 +89,23 @@ func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client
 		logger.Logger.Debug("create new session", zap.String("clientID", clientID))
 	} else {
 		session, exists = broker.sessionManager.ReadClientSession(clientID)
-		if properties, err := session.GetConnectProperties(); err != nil {
-			return err
+		if exists {
+			if properties, err := session.GetConnectProperties(); err != nil {
+				return err
+			} else {
+				//  check session expired
+				willCreate = properties.IsExpired()
+			}
 		} else {
-			//  check session expired
-			willCreate = properties.IsExpired()
+			willCreate = true
 		}
-
-		if willCreate || !exists {
-			// create new session
-			session = broker.sessionManager.NewClientSession(clientID)
-			broker.sessionManager.AddClientSession(clientID, session)
-		} else {
-			// TODO: delete will message delay task
-			// use old client.proto
-			connAck.SessionPresent = true
-		}
+	}
+	if willCreate {
+		// create new session
+		session = broker.sessionManager.NewClientSession(clientID)
+		broker.sessionManager.AddClientSession(clientID, session)
+	} else {
+		connAck.SessionPresent = true
 	}
 
 	if err = client.SetWithOption(client2.WithSession(session), client2.WithKeepAliveTime(time.Second*time.Duration(packet.KeepAlive))); err != nil {

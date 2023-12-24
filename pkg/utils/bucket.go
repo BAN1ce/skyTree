@@ -9,11 +9,13 @@ type Bucket struct {
 // if num <= 0, bucket is unlimited
 func NewBucket(num int) *Bucket {
 	var (
-		c = make(chan struct{}, num)
+		c chan struct{}
 	)
 	if num <= 0 {
+		c = make(chan struct{})
 		close(c)
 	} else {
+		c = make(chan struct{}, num)
 		for i := 0; i < num; i++ {
 			c <- struct{}{}
 		}
@@ -35,6 +37,5 @@ func (b *Bucket) PutToken() {
 	select {
 	case b.c <- struct{}{}:
 	default:
-
 	}
 }

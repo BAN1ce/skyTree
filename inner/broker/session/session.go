@@ -19,7 +19,7 @@ type Session struct {
 	store    *broker.KeyValueStoreWithTimeout
 }
 
-func newSession(clientID string, store broker.KeyValueStore) *Session {
+func newSession(clientID string, store broker.KeyStore) *Session {
 	return &Session{
 		clientID: clientID,
 		store: broker.NewKeyValueStoreWithTimout(

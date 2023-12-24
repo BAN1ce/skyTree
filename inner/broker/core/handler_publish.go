@@ -95,14 +95,14 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 		return err
 	}
 
-	// TODO: should emit all wildcard store
-	// TODO: should emit all wildcard store
+	// TODO: should emit all wildcard messageStore
+	// TODO: should emit all wildcard messageStore
 	event.GlobalEvent.EmitClientPublish(topic, publishMessage)
 
 	switch qos {
 	case broker2.QoS0:
-		if messageID, err = broker.store.StorePublishPacket(subTopics, publishMessage); err != nil {
-			logger.Logger.Error("store publish packet for QoS0 error", zap.Error(err), zap.String("store", topic))
+		if messageID, err = broker.messageStore.StorePublishPacket(subTopics, publishMessage); err != nil {
+			logger.Logger.Error("messageStore publish packet for QoS0 error", zap.Error(err), zap.String("messageStore", topic))
 		}
 	case broker2.QoS1:
 		if len(subTopics) == 0 && !packet.Retain {
@@ -114,9 +114,9 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 				topic: int32(packet.QoS),
 			}
 		}
-		// store message
-		if messageID, err = broker.store.StorePublishPacket(subTopics, publishMessage); err != nil {
-			logger.Logger.Error("store publish packet error", zap.Error(err), zap.String("store", topic))
+		// messageStore message
+		if messageID, err = broker.messageStore.StorePublishPacket(subTopics, publishMessage); err != nil {
+			logger.Logger.Error("messageStore publish packet error", zap.Error(err), zap.String("messageStore", topic))
 			reasonCode = packets.PubackUnspecifiedError
 		} else {
 			reasonCode = packets.PubackSuccess

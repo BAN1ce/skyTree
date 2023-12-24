@@ -9,8 +9,8 @@ const (
 	ClientOffline = "event.client.offline"
 )
 
-func (e *Event) EmitClientOnline(clientID string) {
-	Driver.Emit(ClientOnline, clientID)
+func (e *Event) EmitClientOnline(uid string) {
+	Driver.Emit(ClientOnline, uid)
 }
 
 func (e *Event) CreateListenClientOnline(handler func(i ...interface{})) {

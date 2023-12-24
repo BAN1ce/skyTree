@@ -36,7 +36,7 @@ type Config struct {
 }
 
 type Handler interface {
-	HandlePacket(*Client, *packets.ControlPacket) error
+	HandlePacket(context.Context, *packets.ControlPacket, *Client) error
 }
 
 type Client struct {
@@ -80,7 +80,6 @@ func NewClient(conn net.Conn, option ...Option) *Client {
 	}
 	c.packetIDFactory = utils.NewPacketIDFactory()
 	c.messages = make(chan pkg.Message, c.options.cfg.WindowSize)
-	c.publishBucket = utils.NewBucket(c.options.cfg.WindowSize)
 	c.QoS2 = NewQoS2Handler()
 
 	return c
@@ -105,37 +104,13 @@ func (c *Client) Run(ctx context.Context, handler Handler) {
 			return
 		}
 		for _, handler := range c.handler {
-			if err := handler.HandlePacket(c, controlPacket); err != nil {
+			if err := handler.HandlePacket(nil, controlPacket, c); err != nil {
 				logger.Logger.Warn("handle packet error", zap.Error(err), zap.String("client", c.MetaString()))
 				c.CloseIgnoreError()
 				break
 			}
 		}
 	}
-}
-
-func (c *Client) HandleSub(subscribe *packets.Subscribe, topics map[string]topic2.Topic) map[string]byte {
-	c.mux.Lock()
-	defer c.mux.Unlock()
-	var (
-		failed        = map[string]byte{}
-		subIdentifier int
-	)
-	if subscribe != nil {
-		// store topic's subIdentifier
-		if tmp := subscribe.Properties.SubscriptionIdentifier; tmp != nil {
-			subIdentifier = *tmp
-			for _, t := range subscribe.Subscriptions {
-				c.subIdentifier[t.Topic] = subIdentifier
-			}
-		}
-	}
-	// create topic instance
-
-	for topicName, t := range topics {
-		c.topicManager.AddTopic(topicName, t)
-	}
-	return failed
 }
 
 func (c *Client) AddTopics(topic map[string]topic2.Topic) {
@@ -152,43 +127,6 @@ func (c *Client) readUnfinishedMessage(topic string) []*packet.Message {
 		return nil
 	}
 	return c.options.session.ReadTopicUnFinishedMessage(topic)
-}
-
-func (c *Client) HandleUnSub(topicName string) {
-	// TODO: should finish all cache message before delete topic.
-	c.mux.Lock()
-	defer c.mux.Unlock()
-	c.options.session.DeleteSubTopic(topicName)
-	c.topicManager.DeleteTopic(topicName)
-}
-
-func (c *Client) HandlePubAck(pubAck *packets.Puback) {
-	topicName := c.identifierIDTopic[pubAck.PacketID]
-	if len(topicName) == 0 {
-		logger.Logger.Warn("pubAck packetID not found store", zap.String("client", c.MetaString()), zap.Uint16("packetID", pubAck.PacketID))
-		return
-	}
-	c.publishBucket.PutToken()
-	c.topicManager.HandlePublishAck(topicName, pubAck)
-}
-
-func (c *Client) HandlePubRec(pubRec *packets.Pubrec) {
-	topicName := c.identifierIDTopic[pubRec.PacketID]
-	if len(topicName) == 0 {
-		logger.Logger.Warn("pubRec packetID not found store", zap.String("client", c.MetaString()), zap.Uint16("packetID", pubRec.PacketID))
-		return
-	}
-	c.topicManager.HandlePublishRec(topicName, pubRec)
-}
-
-func (c *Client) HandlePubComp(pubRel *packets.Pubcomp) {
-	topicName := c.identifierIDTopic[pubRel.PacketID]
-	if len(topicName) == 0 {
-		logger.Logger.Warn("pubComp packetID not found store", zap.String("client", c.MetaString()), zap.Uint16("packetID", pubRel.PacketID))
-		return
-	}
-	c.publishBucket.PutToken()
-	c.topicManager.HandelPublishComp(topicName, pubRel)
 }
 
 func (c *Client) Close() error {
@@ -228,11 +166,11 @@ func (c *Client) afterClose() {
 
 	//  handle will message
 	willMessage, ok, err := c.options.session.GetWillMessage()
-	if err != nil {
-		logger.Logger.Error("get will message error", zap.Error(err), zap.String("client", c.MetaString()))
+	if !ok {
 		return
 	}
-	if !ok {
+	if err != nil {
+		logger.Logger.Error("get will message error", zap.Error(err), zap.String("client", c.MetaString()))
 		return
 	}
 
@@ -291,7 +229,6 @@ func (c *Client) WritePacket(packet packets.Packet) error {
 	}
 	c.mux.Lock()
 	defer c.mux.Unlock()
-	logger.Logger.Debug("write packet", zap.String("client", c.MetaString()), zap.Any("packet", packet))
 	return c.writePacket(packet)
 }
 
@@ -302,6 +239,7 @@ func (c *Client) writePacket(packet packets.Packet) error {
 		err              error
 		topicName        string
 	)
+	logger.Logger.Debug("write packet to client", zap.String("client", c.MetaString()), zap.Any("packet", packet))
 	defer pool.ByteBufferPool.Put(buf)
 	// publishAck, subscribeAck, unsubscribeAck should use the same packetID as the original packet
 
@@ -374,6 +312,7 @@ func (c *Client) writePacket(packet packets.Packet) error {
 			return errs.ErrPacketOversize
 		}
 	}
+
 	if _, err = c.conn.Write(buf.Bytes()); err != nil {
 		logger.Logger.Info("write packet error", zap.Error(err), zap.String("client", c.MetaString()), zap.Int64("prepareWriteSize", prepareWriteSize), zap.String("topicName", topicName))
 		// TODO: check maximum packet size should close client ?
@@ -442,6 +381,10 @@ func (c *Client) GetID() string {
 	return c.ID
 }
 
+func (c *Client) GetUid() string {
+	return c.UID
+}
+
 func (c *Client) MetaString() string {
 	var (
 		s strings.Builder
@@ -467,7 +410,6 @@ func (c *Client) Publish(topic string, message *packet.Message) error {
 func (c *Client) RefreshAliveTime() {
 	c.aliveTime = time.Now()
 }
-
-func (c *Client) IsPingTimeout() bool {
-	return time.Since(c.aliveTime) > c.keepAlive
+func (c *Client) GetKeepAliveTime() time.Duration {
+	return c.keepAlive
 }

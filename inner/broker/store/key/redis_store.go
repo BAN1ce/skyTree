@@ -1,7 +1,8 @@
-package store
+package key
 
 import (
 	"context"
+	"fmt"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -96,4 +97,22 @@ func (r *Redis) DeletePrefixKey(ctx context.Context, prefix string) error {
 		return nil
 	}
 	return r.db.Del(ctx, keys...).Err()
+}
+
+func (r *Redis) ZAdd(ctx context.Context, key, value string, score float64) error {
+	return r.db.ZAdd(ctx, key, redis.Z{
+		Score:  score,
+		Member: value,
+	}).Err()
+}
+
+func (r *Redis) ZDel(ctx context.Context, key, member string) error {
+	return r.db.ZRem(ctx, key, member).Err()
+}
+
+func (r *Redis) ZRange(ctx context.Context, key string, start, end float64) ([]string, error) {
+	return r.db.ZRangeByScore(ctx, key, &redis.ZRangeBy{
+		Min: fmt.Sprintf("%f", start),
+		Max: fmt.Sprintf("%f", end),
+	}).Result()
 }

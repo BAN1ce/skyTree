@@ -16,7 +16,7 @@ type PublishElement interface {
 	GetContentType() string
 }
 
-type Store interface {
+type MessageStore interface {
 	TopicMessageStore
 }
 

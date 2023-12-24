@@ -19,7 +19,6 @@ func (a *PubAck) Handle(broker *Broker, client *client.Client, rawPacket *packet
 		packet = rawPacket.Content.(*packets.Puback)
 	)
 	if packet.ReasonCode == packets.PubackSuccess {
-		client.HandlePubAck(packet)
 	} else {
 		logger.Logger.Info("publish ack reason not success", zap.String("client", client.MetaString()),
 			zap.Uint8("reason", packet.ReasonCode), zap.Uint16("packetID", packet.PacketID))
