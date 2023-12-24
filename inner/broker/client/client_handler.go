@@ -13,6 +13,10 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	pong = packets.NewControlPacket(packets.PINGRESP).Content.(*packets.Pingresp)
+)
+
 type InnerHandler struct {
 	client *Client
 }
@@ -57,6 +61,9 @@ func (i *InnerHandler) HandlePacket(ctx context.Context, packet *packets.Control
 	case packets.PUBCOMP:
 		pubCompPacket := packet.Content.(*packets.Pubcomp)
 		i.HandlePubComp(pubCompPacket)
+	case packets.PINGREQ:
+		return i.client.WritePacket(pong)
+
 	default:
 		err = fmt.Errorf("unknown packet type = %d", packet.FixedHeader.Type)
 		logger.Logger.Warn("handle packet error: ", zap.String("client", client.MetaString()), zap.String("packet", packet.String()))

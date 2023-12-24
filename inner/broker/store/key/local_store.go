@@ -240,3 +240,32 @@ func (s *Local) DeletePrefixKey(ctx context.Context, prefix string) error {
 	}
 	return err
 }
+
+func (s *Local) ZAdd(ctx context.Context, key, member string, score float64) error {
+	return s.db.Update(func(tx *nutsdb.Tx) error {
+		return tx.ZAdd(s.kvBucket, []byte(key), score, []byte(member))
+	})
+}
+
+func (s *Local) ZDel(ctx context.Context, key, member string) error {
+	return s.db.Update(func(tx *nutsdb.Tx) error {
+		return tx.ZRem(s.kvBucket, key)
+	})
+}
+
+func (s *Local) ZRange(ctx context.Context, key string, start, end float64) ([]string, error) {
+	var (
+		result []string
+	)
+	err := s.db.View(func(tx *nutsdb.Tx) error {
+		tmp, err := tx.ZRangeByScore(s.kvBucket, start, end, nil)
+		if err != nil {
+			return err
+		}
+		for _, v := range tmp {
+			result = append(result, v.Key())
+		}
+		return nil
+	})
+	return result, err
+}

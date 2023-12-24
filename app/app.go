@@ -63,8 +63,8 @@ func NewApp() *App {
 			SyncEnable:   true,
 		}, nutsdb.WithDir("./data/nutsdb"))
 
-		//keyVStore = localNutsDBStore
-		keyVStore = key.NewRedis()
+		keyVStore = localNutsDBStore
+		//keyVStore = key.NewRedis()
 	)
 	var (
 		sessionManager = session.NewSessions(keyVStore)
