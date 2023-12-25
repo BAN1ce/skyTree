@@ -66,7 +66,7 @@ type Broker struct {
 
 func NewBroker(option ...Option) *Broker {
 	var (
-		ip   = `127.0.0.1`
+		ip   = `0.0.0.0`
 		port = config.GetServer().GetBrokerPort()
 		b    = &Broker{
 			publishPool:   pool.NewPublish(),
