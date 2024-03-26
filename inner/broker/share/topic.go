@@ -7,7 +7,6 @@ import (
 	"github.com/BAN1ce/skyTree/pkg/broker"
 	topic2 "github.com/BAN1ce/skyTree/pkg/broker/topic"
 	"github.com/BAN1ce/skyTree/pkg/packet"
-	"github.com/eclipse/paho.golang/packets"
 	"go.uber.org/zap"
 	"sync"
 )
@@ -24,6 +23,11 @@ func (t *Topic) Start(ctx context.Context) error {
 func (t *Topic) Close() error {
 	t.closeChan <- t.id
 	return nil
+}
+
+func (t *Topic) Meta() topic2.Meta {
+	// TODO: implement me
+	return topic2.Meta{}
 }
 
 func (t *Topic) Publish(publish *packet.Message) error {
@@ -107,35 +111,30 @@ func (d *Dispatch) Close() error {
 	return nil
 }
 
-func (d *Dispatch) ShareTopicAddClient(client broker.ShareClient, qos broker.QoS) topic2.Topic {
+func (d *Dispatch) ShareTopicAddClient(client broker.ShareClient, meta *topic2.Meta) (topic2.Topic, error) {
 	d.mux.Lock()
 	defer d.mux.Unlock()
-	var (
-		subOption = &packets.SubOptions{
-			Topic: d.topic,
-			QoS:   0,
-		}
-	)
+
 	if client, ok := d.client[client.GetID()]; ok {
 		client.Close()
 	}
-	switch qos {
+	switch byte(meta.QoS) {
 	case broker.QoS0:
-		subClient := topic.NewQoS0(subOption, client, d)
+		subClient := topic.NewQoS0(meta, client, d)
 		d.client[client.GetID()] = subClient
 		go subClient.Start(d.ctx)
 
 	case broker.QoS1:
-		subClient := topic.NewQoS1(subOption, client, d, nil)
+		subClient := topic.NewQoS1(meta, client, d, nil)
 		d.client[client.GetID()] = subClient
 		go subClient.Start(d.ctx)
 
 	case broker.QoS2:
-		subClient := topic.NewQoS2(subOption, client, d, nil)
+		subClient := topic.NewQoS2(meta, client, d, nil)
 		d.client[client.GetID()] = subClient
 		go subClient.Start(d.ctx)
 	}
-	return d.NewTopic(client.GetID())
+	return d.NewTopic(client.GetID()), nil
 }
 
 func (d *Dispatch) ShareTopicRemoveClient(id string) {

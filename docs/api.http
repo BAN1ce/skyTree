@@ -1,0 +1,6 @@
+GET http://localhost:9526/metrics
+Accept: application/json
+
+###
+
+

@@ -5,6 +5,7 @@ import (
 	"github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/logger"
 	broker2 "github.com/BAN1ce/skyTree/pkg/broker"
+	"github.com/BAN1ce/skyTree/pkg/broker/retain"
 	"github.com/BAN1ce/skyTree/pkg/errs"
 	packet2 "github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/eclipse/paho.golang/packets"
@@ -102,7 +103,7 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 	switch qos {
 	case broker2.QoS0:
 		if messageID, err = broker.messageStore.StorePublishPacket(subTopics, publishMessage); err != nil {
-			logger.Logger.Error("messageStore publish packet for QoS0 error", zap.Error(err), zap.String("messageStore", topic))
+			logger.Logger.Error("messageStore publish packet for QoS0 error", zap.Error(err), zap.String("messageStore", topic), zap.String("messageID", messageID))
 		}
 	case broker2.QoS1:
 		if len(subTopics) == 0 && !packet.Retain {
@@ -116,7 +117,7 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 		}
 		// messageStore message
 		if messageID, err = broker.messageStore.StorePublishPacket(subTopics, publishMessage); err != nil {
-			logger.Logger.Error("messageStore publish packet error", zap.Error(err), zap.String("messageStore", topic))
+			logger.Logger.Error("messageStore publish packet error", zap.Error(err), zap.String("messageStore", topic), zap.String("messageID", messageID))
 			reasonCode = packets.PubackUnspecifiedError
 		} else {
 			reasonCode = packets.PubackSuccess
@@ -136,8 +137,12 @@ func (p *PublishHandler) Handle(broker *Broker, client *client.Client, rawPacket
 		return err
 	}
 
-	if packet.Retain && messageID != "" {
-		if err = broker.state.CreateRetainMessageID(packet.Topic, messageID); err != nil {
+	if packet.Retain {
+		// if payload is empty, then delete retain message
+		if err = broker.retain.PutRetainMessage(&retain.Message{
+			Topic:   topic,
+			Payload: packet.Payload,
+		}); err != nil {
 			reasonCode = packets.PubackUnspecifiedError
 		}
 	}

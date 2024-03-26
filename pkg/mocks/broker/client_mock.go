@@ -5,15 +5,15 @@
 package broker
 
 import (
+	broker "github.com/BAN1ce/skyTree/pkg/broker/client"
 	reflect "reflect"
 
-	broker "github.com/BAN1ce/skyTree/pkg/broker"
 	packet "github.com/BAN1ce/skyTree/pkg/packet"
 	packets "github.com/eclipse/paho.golang/packets"
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockClientID is a mock of ClientID interface.
+// MockClientID is a mock of ID interface.
 type MockClientID struct {
 	ctrl     *gomock.Controller
 	recorder *MockClientIDMockRecorder

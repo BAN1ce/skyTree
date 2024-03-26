@@ -1,27 +1,28 @@
 package topic
 
 import (
-	"github.com/BAN1ce/skyTree/pkg/broker"
+	"github.com/BAN1ce/skyTree/pkg/broker/client"
+	"github.com/BAN1ce/skyTree/pkg/broker/topic"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/eclipse/paho.golang/packets"
 )
 
 type Client struct {
-	writer    broker.PacketWriter
-	subOption *packets.SubOptions
+	writer client.PacketWriter
+	meta   *topic.Meta
 }
 
-func NewClient(writer broker.PacketWriter, subOption *packets.SubOptions) broker.Client {
+func NewClient(writer client.PacketWriter, meta *topic.Meta) *Client {
 	return &Client{
-		writer:    writer,
-		subOption: subOption,
+		writer: writer,
+		meta:   meta,
 	}
 }
 
 func (c *Client) Publish(publish *packet.Message) error {
 	// NoLocal means that the server does not send messages published by the client itself.
-	if c.subOption.NoLocal && c.writer.GetID() == publish.ClientID {
+	if c.meta.NoLocal && c.writer.GetID() == publish.ClientID {
 		return nil
 	}
 	var (
@@ -30,7 +31,16 @@ func (c *Client) Publish(publish *packet.Message) error {
 	defer pool.PublishPool.Put(publishPacket)
 
 	pool.CopyPublish(publishPacket, publish.PublishPacket)
-	publishPacket.QoS = c.subOption.QoS
+	publishPacket.QoS = byte(c.meta.QoS)
+
+	// if topic has identifier, set the identifier to the publishing packet
+	if c.meta.Identifier != 0 {
+		identifier := byte(c.meta.Identifier)
+		if publishPacket.Properties == nil {
+			publishPacket.Properties = &packets.Properties{}
+		}
+		publishPacket.Properties.SubIDAvailable = &identifier
+	}
 
 	return c.writer.WritePacket(publishPacket)
 }
@@ -39,7 +49,7 @@ func (c *Client) PubRel(message *packet.Message) error {
 	return c.writer.WritePacket(message.PubRelPacket)
 }
 
-func (c *Client) GetPacketWriter() broker.PacketWriter {
+func (c *Client) GetPacketWriter() client.PacketWriter {
 	return c.writer
 }
 

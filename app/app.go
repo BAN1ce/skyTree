@@ -6,11 +6,12 @@ import (
 	"github.com/BAN1ce/skyTree/api"
 	"github.com/BAN1ce/skyTree/config"
 	"github.com/BAN1ce/skyTree/inner/broker/core"
+	"github.com/BAN1ce/skyTree/inner/broker/retain"
 	"github.com/BAN1ce/skyTree/inner/broker/session"
 	"github.com/BAN1ce/skyTree/inner/broker/share"
 	"github.com/BAN1ce/skyTree/inner/broker/state"
 	"github.com/BAN1ce/skyTree/inner/broker/store"
-	"github.com/BAN1ce/skyTree/inner/broker/store/key"
+	"github.com/BAN1ce/skyTree/inner/broker/store/db"
 	"github.com/BAN1ce/skyTree/inner/broker/store/message"
 	"github.com/BAN1ce/skyTree/inner/event"
 	"github.com/BAN1ce/skyTree/inner/facade"
@@ -55,7 +56,7 @@ func NewApp() *App {
 		clientManager = core.NewClientManager()
 	)
 	var (
-		localNutsDBStore = key.NewLocalStore(nutsdb.Options{
+		localNutsDBStore = db.NewLocalStore(nutsdb.Options{
 			EntryIdxMode: nutsdb.HintKeyValAndRAMIdxMode,
 			SegmentSize:  nutsdb.MB * 256,
 			NodeNum:      1,
@@ -63,8 +64,8 @@ func NewApp() *App {
 			SyncEnable:   true,
 		}, nutsdb.WithDir("./data/nutsdb"))
 
-		keyVStore = localNutsDBStore
-		//keyVStore = key.NewRedis()
+		//keyVStore = localNutsDBStore
+		keyVStore = db.NewRedis()
 	)
 	var (
 		sessionManager = session.NewSessions(keyVStore)
@@ -81,36 +82,40 @@ func NewApp() *App {
 
 	var (
 		publishRetrySchedule = facade.SinglePublishRetry()
-		app                  = &App{
-			brokerCore: core.NewBroker(
-				core.WithKeyStore(keyVStore),
-				core.WithPlugins(plugin.NewDefaultPlugin()),
-				core.WithPublishRetry(publishRetrySchedule),
-				core.WithMessageStore(storeWrapper),
-				core.WithState(state.NewState(keyVStore)),
-				core.WithSessionManager(sessionManager),
-				core.WithClientManager(clientManager),
-				core.WithShareManager(shareTopicManger),
-				core.WithSubCenter(broker2.NewLocalSubCenter()),
-				core.WithHandlers(&core.Handlers{
-					Connect:     core.NewConnectHandler(),
-					Publish:     core.NewPublishHandler(),
-					PublishAck:  core.NewPublishAck(),
-					PublishRec:  core.NewPublishRec(),
-					PublishRel:  core.NewPublishRel(),
-					PublishComp: core.NewPublishComp(),
-					Ping:        core.NewPingHandler(),
-					Sub:         core.NewSubHandler(),
-					UnSub:       core.NewUnsubHandler(),
-					Auth:        core.NewAuthHandler(),
-					Disconnect:  core.NewDisconnectHandler(),
-				})),
+
+		brokerCore = core.NewBroker(
+			core.WithRetainStore(retain.NewRetainDB(keyVStore)),
+			core.WithKeyStore(keyVStore),
+			core.WithPlugins(plugin.NewDefaultPlugin()),
+			core.WithPublishRetry(publishRetrySchedule),
+			core.WithMessageStore(storeWrapper),
+			core.WithState(state.NewState(keyVStore)),
+			core.WithSessionManager(sessionManager),
+			core.WithClientManager(clientManager),
+			core.WithShareManager(shareTopicManger),
+			core.WithSubCenter(broker2.NewLocalSubCenter()),
+			core.WithHandlers(&core.Handlers{
+				Connect:     core.NewConnectHandler(),
+				Publish:     core.NewPublishHandler(),
+				PublishAck:  core.NewPublishAck(),
+				PublishRec:  core.NewPublishRec(),
+				PublishRel:  core.NewPublishRel(),
+				PublishComp: core.NewPublishComp(),
+				Ping:        core.NewPingHandler(),
+				Sub:         core.NewSubHandler(),
+				UnSub:       core.NewUnsubHandler(),
+				Auth:        core.NewAuthHandler(),
+				Disconnect:  core.NewDisconnectHandler(),
+			}))
+		app = &App{
+			brokerCore: brokerCore,
 		}
 	)
 	app.components = []component{
 		app.brokerCore,
 		api.NewAPI(fmt.Sprintf(":%d", config.GetServer().GetPort()),
 			api.WithClientManager(clientManager),
+			api.WithTopicManager(brokerCore),
 			api.WithStore(localNutsDBStore),
 			api.WithSessionManager(sessionManager)),
 	}

@@ -1,4 +1,4 @@
-package key
+package db
 
 import (
 	"context"
@@ -46,15 +46,13 @@ func (r *Redis) ReadPrefixKey(ctx context.Context, prefix string) (map[string]st
 		err    error
 		tmp    []string
 		cursor uint64
-		result map[string]string
 	)
 	for {
-		result := r.db.Scan(ctx, cursor, prefix, 1000)
-		tmp, cursor, err = result.Result()
-		keys = append(keys, tmp...)
+		tmp, cursor, err = r.db.Scan(ctx, cursor, prefix+"*", 1000).Result()
 		if err != nil {
-			break
+			return nil, err
 		}
+		keys = append(keys, tmp...)
 		if cursor == 0 {
 			break
 		}
@@ -62,14 +60,16 @@ func (r *Redis) ReadPrefixKey(ctx context.Context, prefix string) (map[string]st
 	if len(keys) == 0 {
 		return nil, nil
 	}
-	if value, err := r.db.MGet(ctx, keys...).Result(); err != nil {
-		return result, err
-	} else {
-		for i := 0; i < len(value); i++ {
-			if i < len(keys) {
-				break
-			}
-			result[keys[i]] = value[i].(string)
+	values, err := r.db.MGet(ctx, keys...).Result()
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]string, len(keys))
+	for i, value := range values {
+		if valueStr, ok := value.(string); ok {
+			result[keys[i]] = valueStr
+		} else {
+			return nil, fmt.Errorf("value for key %s is not a string", keys[i])
 		}
 	}
 	return result, nil

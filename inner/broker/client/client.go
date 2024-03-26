@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"github.com/BAN1ce/Tree/proto"
 	"github.com/BAN1ce/skyTree/inner/broker/client/topic"
 	"github.com/BAN1ce/skyTree/inner/facade"
 	"github.com/BAN1ce/skyTree/logger"
@@ -11,6 +10,7 @@ import (
 	"github.com/BAN1ce/skyTree/pkg/broker/session"
 	topic2 "github.com/BAN1ce/skyTree/pkg/broker/topic"
 	"github.com/BAN1ce/skyTree/pkg/errs"
+	"github.com/BAN1ce/skyTree/pkg/model"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/BAN1ce/skyTree/pkg/retry"
@@ -40,57 +40,57 @@ type Handler interface {
 }
 
 type Client struct {
-	ID                   string `json:"id"`
-	UID                  string `json:"UID"`
-	connectProperties    *session.ConnectProperties
-	ctx                  context.Context
-	cancel               context.CancelCauseFunc
-	mux                  sync.RWMutex
-	conn                 net.Conn
-	handler              []Handler
-	state                state.State
-	options              *Options
-	packetIDFactory      PacketIDFactory
-	publishBucket        *utils.Bucket
-	messages             chan pkg.Message
-	topicManager         *topic.Manager
-	shareTopic           map[string]struct{}
-	identifierIDTopic    map[uint16]string
-	QoS2                 *QoS2Handler
-	topicAliasFromClient map[uint16]string
-	subIdentifier        map[string]int
-	willFlag             bool
-	keepAlive            time.Duration
-	aliveTime            time.Time
+	ID                      string `json:"id"`
+	UID                     string `json:"UID"`
+	connectProperties       *session.ConnectProperties
+	ctx                     context.Context
+	cancel                  context.CancelCauseFunc
+	mux                     sync.RWMutex
+	conn                    net.Conn
+	handler                 []Handler
+	state                   state.State
+	component               *component
+	packetIDFactory         PacketIDFactory
+	publishBucket           *utils.Bucket
+	messages                chan pkg.Message
+	topicManager            *topic.Manager
+	shareTopic              map[string]struct{}
+	packetIdentifierIDTopic map[uint16]string
+	QoS2                    *QoS2Handler
+	topicAliasFromClient    map[uint16]string
+	willFlag                bool
+	keepAlive               time.Duration
+	aliveTime               time.Time
 }
 
-func NewClient(conn net.Conn, option ...Option) *Client {
+func NewClient(conn net.Conn, option ...Component) *Client {
 	var (
 		c = &Client{
-			UID:                  uuid.NewString(),
-			conn:                 conn,
-			options:              new(Options),
-			identifierIDTopic:    map[uint16]string{},
-			topicAliasFromClient: map[uint16]string{},
-			shareTopic:           map[string]struct{}{},
+			UID:                     uuid.NewString(),
+			conn:                    conn,
+			component:               new(component),
+			packetIdentifierIDTopic: map[uint16]string{},
+			topicAliasFromClient:    map[uint16]string{},
+			shareTopic:              map[string]struct{}{},
 		}
 	)
 	for _, o := range option {
-		o(c.options)
+		o(c.component)
 	}
 	c.packetIDFactory = utils.NewPacketIDFactory()
-	c.messages = make(chan pkg.Message, c.options.cfg.WindowSize)
+	c.messages = make(chan pkg.Message, c.component.cfg.WindowSize)
 	c.QoS2 = NewQoS2Handler()
 
 	return c
 }
 
 func (c *Client) Run(ctx context.Context, handler Handler) {
+	ctx = context.WithValue(ctx, pkg.ClientUIDKey, c.UID)
 	c.ctx, c.cancel = context.WithCancelCause(ctx)
 	c.topicManager = topic.NewManager(c.ctx)
 	c.handler = []Handler{
 		handler,
-		newInnerHandler(c),
+		newClientHandler(c),
 	}
 	var (
 		controlPacket *packets.ControlPacket
@@ -122,11 +122,11 @@ func (c *Client) AddTopics(topic map[string]topic2.Topic) {
 }
 
 func (c *Client) readUnfinishedMessage(topic string) []*packet.Message {
-	if c.options.session == nil {
+	if c.component.session == nil {
 		logger.Logger.Warn("session is nil", zap.String("client", c.MetaString()))
 		return nil
 	}
-	return c.options.session.ReadTopicUnFinishedMessage(topic)
+	return c.component.session.ReadTopicUnFinishedMessage(topic)
 }
 
 func (c *Client) Close() error {
@@ -142,7 +142,7 @@ func (c *Client) CloseIgnoreError() {
 func (c *Client) afterClose() {
 	logger.Logger.Info("client close", zap.String("clientID", c.ID))
 	defer func() {
-		c.options.notifyClose.NotifyClientClose(c)
+		c.component.notifyClose.NotifyClientClose(c)
 	}()
 
 	if err := c.conn.Close(); err != nil {
@@ -156,7 +156,7 @@ func (c *Client) afterClose() {
 
 	//  close share topicManager
 
-	if c.options.session == nil {
+	if c.component.session == nil {
 		logger.Logger.Warn("session is nil", zap.String("client", c.MetaString()))
 		return
 	}
@@ -165,7 +165,7 @@ func (c *Client) afterClose() {
 	c.storeUnfinishedMessage()
 
 	//  handle will message
-	willMessage, ok, err := c.options.session.GetWillMessage()
+	willMessage, ok, err := c.component.session.GetWillMessage()
 	if !ok {
 		return
 	}
@@ -179,7 +179,7 @@ func (c *Client) afterClose() {
 	)
 
 	if willDelayInterval == 0 {
-		c.options.notifyClose.NotifyWillMessage(willMessage)
+		c.component.notifyClose.NotifyWillMessage(willMessage)
 		return
 	}
 
@@ -193,7 +193,7 @@ func (c *Client) afterClose() {
 		Job: func(task *retry.Task) {
 			if m, ok := task.Data.(*session.WillMessage); ok {
 				logger.Logger.Debug("will message delay task", zap.String("client", c.MetaString()), zap.String("delayTaskID", task.Key))
-				c.options.notifyClose.NotifyWillMessage(m)
+				c.component.notifyClose.NotifyWillMessage(m)
 			} else {
 				logger.Logger.Error("will message type error", zap.String("client", c.MetaString()))
 			}
@@ -208,12 +208,12 @@ func (c *Client) afterClose() {
 
 func (c *Client) storeUnfinishedMessage() {
 	var message = c.topicManager.GetUnfinishedMessage()
-	if c.options.session == nil {
+	if c.component.session == nil {
 		return
 	}
 	for topicName, message := range message {
 		logger.Logger.Debug("store unfinished message", zap.String("client", c.MetaString()), zap.String("topicName", topicName), zap.Int("message", len(message)))
-		c.options.session.CreateTopicUnFinishedMessage(topicName, message)
+		c.component.session.CreateTopicUnFinishedMessage(topicName, message)
 	}
 }
 
@@ -247,15 +247,15 @@ func (c *Client) writePacket(packet packets.Packet) error {
 
 	case *packets.Connack:
 		// do plugin
-		c.options.plugin.DoSendConnAck(c.ID, p)
+		c.component.plugin.DoSendConnAck(c.ID, p)
 
 	case *packets.Suback:
 		// do plugin
-		c.options.plugin.DoSendSubAck(c.ID, p)
+		c.component.plugin.DoSendSubAck(c.ID, p)
 
 	case *packets.Unsuback:
 		// do plugin
-		c.options.plugin.DoSendUnsubAck(c.ID, p)
+		c.component.plugin.DoSendUnsubAck(c.ID, p)
 
 	case *packets.Publish:
 		if p.QoS != broker.QoS0 {
@@ -267,37 +267,32 @@ func (c *Client) writePacket(packet packets.Packet) error {
 			}
 		}
 		// do plugin
-		c.options.plugin.DoSendPublish(c.ID, p)
+		c.component.plugin.DoSendPublish(c.ID, p)
 		topicName = p.Topic
 		// generate new packetID and store
 		p.PacketID = c.packetIDFactory.Generate()
-		c.identifierIDTopic[p.PacketID] = p.Topic
+		c.packetIdentifierIDTopic[p.PacketID] = p.Topic
 		logger.Logger.Debug("publish to client", zap.Uint16("packetID", p.PacketID), zap.String("client", c.MetaString()), zap.String("store", p.Topic))
-
-		// append subscriptionIdentifier
-		if subIdentifier, ok := c.subIdentifier[p.Topic]; ok {
-			p.Properties.SubscriptionIdentifier = &subIdentifier
-		}
 
 	case *packets.Puback:
 		// do plugin
-		c.options.plugin.DoSendPubAck(c.ID, p)
+		c.component.plugin.DoSendPubAck(c.ID, p)
 
 	case *packets.Pubrec:
 		// do plugin
-		c.options.plugin.DoSendPubRec(c.ID, p)
+		c.component.plugin.DoSendPubRec(c.ID, p)
 
 	case *packets.Pubrel:
 		// do plugin
-		c.options.plugin.DoSendPubRel(c.ID, p)
+		c.component.plugin.DoSendPubRel(c.ID, p)
 
 	case *packets.Pubcomp:
 		// do plugin
-		c.options.plugin.DoSendPubComp(c.ID, p)
+		c.component.plugin.DoSendPubComp(c.ID, p)
 
 	case *packets.Pingresp:
 		// do plugin
-		c.options.plugin.DoSendPingResp(c.ID, p)
+		c.component.plugin.DoSendPingResp(c.ID, p)
 
 	}
 
@@ -324,36 +319,31 @@ func (c *Client) writePacket(packet packets.Packet) error {
 	return nil
 }
 
-func (c *Client) SetWithOption(ops ...Option) error {
+func (c *Client) SetComponent(ops ...Component) error {
 	c.mux.Lock()
 	for _, o := range ops {
-		o(c.options)
+		o(c.component)
 	}
 
 	c.mux.Unlock()
 	return nil
 }
 
-type SessionTopicData struct {
-	SubOption  *proto.SubOption
-	UnFinished []*packet.Message
-}
-
 func (c *Client) getSession() session.Session {
-	return c.options.session
+	return c.component.session
 }
 
 func (c *Client) setWill(message *session.WillMessage) error {
 	c.willFlag = true
-	if oldWillMessage, ok, _ := c.options.session.GetWillMessage(); ok {
+	if oldWillMessage, ok, _ := c.component.session.GetWillMessage(); ok {
 		facade.GetWillDelay().Delete(oldWillMessage.DelayTaskID)
 	}
-	return c.options.session.SetWillMessage(message)
+	return c.component.session.SetWillMessage(message)
 }
 func (c *Client) DeleteWill() error {
 	c.mux.Lock()
 	defer c.mux.Unlock()
-	return c.options.session.DeleteWillMessage()
+	return c.component.session.DeleteWillMessage()
 }
 
 func (c *Client) SetClientTopicAlias(topic string, alias uint16) {
@@ -366,7 +356,7 @@ func (c *Client) SetConnectProperties(properties *session.ConnectProperties) err
 	c.mux.Lock()
 	defer c.mux.Unlock()
 	c.connectProperties = properties
-	return c.options.session.SetConnectProperties(properties)
+	return c.component.session.SetConnectProperties(properties)
 }
 func (c *Client) GetConnectProperties() session.ConnectProperties {
 	c.mux.RLock()
@@ -397,6 +387,14 @@ func (c *Client) MetaString() string {
 	return s.String()
 }
 
+func (c *Client) Meta() *model.Meta {
+	return &model.Meta{
+		AliveTime: c.aliveTime,
+		KeepAlive: c.keepAlive.String(),
+		Topic:     c.topicManager.Meta(),
+	}
+}
+
 func (c *Client) GetClientTopicAlias(u uint16) string {
 	c.mux.RLock()
 	defer c.mux.RUnlock()
@@ -412,4 +410,8 @@ func (c *Client) RefreshAliveTime() {
 }
 func (c *Client) GetKeepAliveTime() time.Duration {
 	return c.keepAlive
+}
+
+func (c *Client) GetSession() session.Session {
+	return c.component.session
 }

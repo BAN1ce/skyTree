@@ -1,12 +1,13 @@
 package broker
 
 import (
+	"github.com/BAN1ce/skyTree/pkg/broker/client"
 	"github.com/BAN1ce/skyTree/pkg/broker/topic"
 	"github.com/eclipse/paho.golang/packets"
 )
 
 type ShareClient interface {
-	PacketWriter
+	client.PacketWriter
 }
 
 type ShareTopicManager interface {

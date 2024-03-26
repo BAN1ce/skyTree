@@ -11,14 +11,18 @@ const (
 
 	keyClientUnfinishedMessage    = `/unfinished/message`
 	keyClientLatestAckedMessageID = `/latest_message_id`
+	KeyCreatedTime                = `/created_time`
 )
 
 func clientSessionPrefix(clientID string) string {
 	return keySessionPrefix + clientID
 }
 
+func clientSessionCreatedTimeKey(clientID string) string {
+	return clientSessionPrefix(clientID) + KeyCreatedTime
+}
 func clientTopicPrefix(clientID string) string {
-	return clientSessionPrefix(clientID) + "/" + keyTopicPrefix
+	return clientSessionPrefix(clientID) + keyTopicPrefix
 }
 
 func clientUnfinishedMessageKey(clientID, topic string) string {

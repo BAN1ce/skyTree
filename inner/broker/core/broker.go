@@ -15,8 +15,11 @@ import (
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/broker/plugin"
+	"github.com/BAN1ce/skyTree/pkg/broker/retain"
 	"github.com/BAN1ce/skyTree/pkg/broker/session"
+	"github.com/BAN1ce/skyTree/pkg/broker/store"
 	"github.com/BAN1ce/skyTree/pkg/middleware"
+	"github.com/BAN1ce/skyTree/pkg/model"
 	packet2 "github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/pool"
 	"github.com/eclipse/paho.golang/packets"
@@ -51,8 +54,8 @@ type Broker struct {
 	userAuth               middleware.UserAuth
 	subTree                broker.SubCenter
 	messageStore           *message.Wrapper
-	keyStore               broker.KeyStore
-	clientManager          *ClientManager
+	keyStore               store.KeyStore
+	clientManager          *client.Clients
 	sessionManager         session.Manager
 	publishPool            *pool.Publish
 	publishRetry           facade.RetrySchedule
@@ -62,6 +65,7 @@ type Broker struct {
 	shareManager           *share.Manager
 	plugins                *plugin.Plugins
 	clientKeepAliveMonitor *monitor.KeepAlive
+	retain                 retain.Retain
 }
 
 func NewBroker(option ...Option) *Broker {
@@ -79,15 +83,12 @@ func NewBroker(option ...Option) *Broker {
 		log.Fatalln("resolve tcp addr error: ", err)
 	}
 	b.server = server.NewTCPServer(tcpAddr)
+
 	for _, opt := range option {
 		opt(b)
 	}
-	b.clientKeepAliveMonitor = monitor.NewKeepAlive(b.keyStore, 30*time.Second, func(uid []string) {
-		for _, id := range uid {
-			b.DeleteClient(id)
-		}
-	})
 
+	b.clientKeepAliveMonitor = monitor.NewKeepAlive(b.keyStore, 30*time.Second, b.CloseExpiredClient)
 	return b
 }
 
@@ -120,7 +121,7 @@ func (b *Broker) acceptConn() {
 		newClient := client.NewClient(conn, client.WithConfig(client.Config{
 			WindowSize:       10,
 			ReadStoreTimeout: 3 * time.Second,
-		}), client.WithNotifyClose(b), client.WithPlugin(b.plugins))
+		}), client.WithNotifyClose(b), client.WithPlugin(b.plugins), client.WithRetain(b.retain), client.WithStore(b.messageStore))
 		wg.Add(1)
 		go func(c *client.Client) {
 			c.Run(b.ctx, b)
@@ -211,7 +212,7 @@ func (b *Broker) DeleteClient(uid string) {
 
 func (b *Broker) NotifyClientClose(client *client.Client) {
 	b.mux.Lock()
-	b.clientManager.deleteClient(client)
+	b.clientManager.DeleteClient(client.UID)
 	b.mux.Unlock()
 }
 
@@ -229,42 +230,17 @@ func (b *Broker) NotifyWillMessage(willMessage *session.WillMessage) {
 
 	event.GlobalEvent.EmitClientPublish(willMessage.Topic, publishMessage)
 
-	clients := b.subTree.Match(willMessage.Topic)
+	topics := b.subTree.MatchTopic(willMessage.Topic)
 
-	if len(clients) == 0 {
+	if len(topics) == 0 {
 		logger.Logger.Info("notify will message, no client subscribe topic", zap.String("topic", willMessage.Topic))
 		return
 	}
-	if _, err := b.messageStore.StorePublishPacket(clients, publishMessage); err != nil {
+	if _, err := b.messageStore.StorePublishPacket(topics, publishMessage); err != nil {
 		logger.Logger.Error("messageStore will message publish packet error", zap.Error(err), zap.String("topic", willMessage.Topic))
 		return
 	}
 
-}
-
-func (b *Broker) ReadTopicRetainWillMessage(topic string) []*packet2.Message {
-	var (
-		willPublishMessage []*packet2.Message
-		messageID, err     = b.state.ReadTopicWillMessageID(topic)
-		ctx, cancel        = context.WithCancel(b.ctx)
-	)
-	cancel()
-	if err != nil {
-		logger.Logger.Error("read will message error", zap.Error(err), zap.String("topic", topic))
-		return nil
-	}
-	for id, clientID := range messageID {
-		// skip online client's will message
-		if _, online := b.clientManager.ReadClient(clientID); online {
-			continue
-		}
-		if err := b.messageStore.ReadPublishMessage(ctx, topic, id, 1, true, func(message *packet2.Message) {
-			willPublishMessage = append(willPublishMessage, message)
-		}); err != nil {
-			logger.Logger.Error("read will message error", zap.Error(err), zap.String("topic", topic), zap.String("messageID", id))
-		}
-	}
-	return willPublishMessage
 }
 
 func (b *Broker) ReadTopicRetainMessage(topic string) []*packet2.Message {
@@ -290,7 +266,7 @@ func (b *Broker) ReadTopicRetainMessage(topic string) []*packet2.Message {
 }
 func (b *Broker) ReleaseSession(clientID string) {
 	var (
-		clientSession, ok = b.sessionManager.ReadClientSession(clientID)
+		clientSession, ok = b.sessionManager.ReadClientSession(context.TODO(), clientID)
 	)
 	if !ok {
 		return
@@ -303,4 +279,29 @@ func (b *Broker) ReleaseSession(clientID string) {
 		facade.GetWillDelay().Delete(willMessage.DelayTaskID)
 	}
 	clientSession.Release()
+}
+
+func (b *Broker) ReadTopic(topic string) (*model.Topic, error) {
+	var (
+		result = &model.Topic{}
+	)
+	if m, ok := b.retain.GetRetainMessage(topic); ok {
+		result.Retain = m
+	}
+	c := b.subTree.Match(topic)
+	for clientID, qos := range c {
+		result.SubClient = append(result.SubClient, &model.Subscriber{
+			ID:  clientID,
+			QoS: int(qos),
+		})
+	}
+	return result, nil
+}
+
+// CloseExpiredClient close expired client
+func (b *Broker) CloseExpiredClient(uid []string) {
+	logger.Logger.Info("close expired client", zap.Strings("uid", uid))
+	for _, id := range uid {
+		b.DeleteClient(id)
+	}
 }

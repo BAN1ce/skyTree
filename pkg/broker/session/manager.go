@@ -1,7 +1,9 @@
 package session
 
+import "context"
+
 type Manager interface {
-	ReadClientSession(clientID string) (Session, bool)
-	AddClientSession(clientID string, session Session)
-	NewClientSession(clientID string) Session
+	ReadClientSession(ctx context.Context, clientID string) (Session, bool)
+	AddClientSession(ctx context.Context, clientID string, session Session)
+	NewClientSession(ctx context.Context, clientID string) Session
 }

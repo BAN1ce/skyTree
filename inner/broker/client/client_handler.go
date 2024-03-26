@@ -7,6 +7,7 @@ import (
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker/session"
 	topic2 "github.com/BAN1ce/skyTree/pkg/broker/topic"
+	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/BAN1ce/skyTree/pkg/utils"
 	"github.com/eclipse/paho.golang/packets"
 	"github.com/google/uuid"
@@ -21,7 +22,7 @@ type InnerHandler struct {
 	client *Client
 }
 
-func newInnerHandler(client *Client) *InnerHandler {
+func newClientHandler(client *Client) *InnerHandler {
 	return &InnerHandler{
 		client: client,
 	}
@@ -77,7 +78,7 @@ func (i *InnerHandler) HandleConnect(connectPacket *packets.Connect) error {
 	defer i.client.mux.Unlock()
 	sessionConnectProp := session.NewConnectProperties(connectPacket.Properties)
 	i.client.connectProperties = sessionConnectProp
-	if err := i.client.options.session.SetConnectProperties(sessionConnectProp); err != nil {
+	if err := i.client.component.session.SetConnectProperties(sessionConnectProp); err != nil {
 		return err
 	}
 	i.recoverTopicFromSession()
@@ -114,36 +115,40 @@ func (i *InnerHandler) HandleSub(subscribe *packets.Subscribe) error {
 	c.mux.Lock()
 	defer c.mux.Unlock()
 	var (
-		subIdentifier int
-		subAck        = packets.NewControlPacket(packets.SUBACK).Content.(*packets.Suback)
+		subAck = packets.NewControlPacket(packets.SUBACK).Content.(*packets.Suback)
 	)
 	subAck.PacketID = subscribe.PacketID
-	if subscribe != nil {
-		// store topic's subIdentifier
-		if tmp := subscribe.Properties.SubscriptionIdentifier; tmp != nil {
-			subIdentifier = *tmp
-			for _, t := range subscribe.Subscriptions {
-				c.subIdentifier[t.Topic] = subIdentifier
-			}
-		}
-	}
+
 	// create topic instance
 	_, noShareSubscribePacket := topic2.SplitShareAndNoShare(subscribe)
 	var brokerTopics = map[string]topic2.Topic{}
 
 	// handle simple sub
 	for _, subOptions := range noShareSubscribePacket.Subscriptions {
-		brokerTopics[subOptions.Topic] = topic.CreateTopic(i.client, &subOptions)
+		meta := topic2.NewMetaFromSubPacket(&subOptions, noShareSubscribePacket.Properties)
+		brokerTopics[subOptions.Topic] = topic.CreateTopic(i.client, meta)
+		i.client.getSession().CreateSubTopic(meta)
+		subAck.Reasons = append(subAck.Reasons, subOptions.QoS)
 	}
 
 	// client handle sub and create qos0,qos1,qos2 subOptions
 	for topicName, t := range brokerTopics {
 		c.topicManager.AddTopic(topicName, t)
+
+		// get retain message after sub
+		if message, ok := c.component.retain.GetRetainMessage(topicName); ok {
+			pub := packets.NewControlPacket(packets.PUBLISH).Content.(*packets.Publish)
+			pub.Payload = message.Payload
+			pub.Topic = topicName
+			if err := t.Publish(&packet.Message{
+				PublishPacket: pub,
+			}); err != nil {
+				logger.Logger.Error("retain message publish error",
+					zap.Error(err), zap.String("topic", topicName), zap.String("client", c.MetaString()))
+			}
+		}
 	}
 
-	for _, subOption := range subscribe.Subscriptions {
-		subAck.Reasons = append(subAck.Reasons, subOption.QoS)
-	}
 	return i.client.writePacket(subAck)
 }
 
@@ -151,21 +156,24 @@ func (i *InnerHandler) HandleUnsub(unsubscribe *packets.Unsubscribe) error {
 	c := i.client
 	c.mux.Lock()
 	defer c.mux.Unlock()
-	for _, topicName := range unsubscribe.Topics {
-		c.options.session.DeleteSubTopic(topicName)
-		c.topicManager.DeleteTopic(topicName)
-	}
-	var unsubAck = packets.NewControlPacket(packets.UNSUBACK).Content.(*packets.Unsuback)
+
+	var (
+		unsubAck = packets.NewControlPacket(packets.UNSUBACK).Content.(*packets.Unsuback)
+	)
 	unsubAck.PacketID = unsubscribe.PacketID
-	for range unsubscribe.Topics {
+
+	for _, topicName := range unsubscribe.Topics {
+		c.component.session.DeleteSubTopic(topicName)
+		c.topicManager.DeleteTopic(topicName)
 		unsubAck.Reasons = append(unsubAck.Reasons, packets.UnsubackSuccess)
 	}
+
 	return i.client.writePacket(unsubAck)
 }
 
 func (i *InnerHandler) HandlePubAck(pubAck *packets.Puback) error {
 	c := i.client
-	topicName := c.identifierIDTopic[pubAck.PacketID]
+	topicName := c.packetIdentifierIDTopic[pubAck.PacketID]
 	if len(topicName) == 0 {
 		logger.Logger.Warn("pubAck packetID not found store", zap.String("client", c.MetaString()), zap.Uint16("packetID", pubAck.PacketID))
 		return nil
@@ -177,7 +185,7 @@ func (i *InnerHandler) HandlePubAck(pubAck *packets.Puback) error {
 
 func (i *InnerHandler) HandlePubRec(pubRec *packets.Pubrec) {
 	c := i.client
-	topicName := c.identifierIDTopic[pubRec.PacketID]
+	topicName := c.packetIdentifierIDTopic[pubRec.PacketID]
 	if len(topicName) == 0 {
 		logger.Logger.Warn("pubRec packetID not found store", zap.String("client", c.MetaString()), zap.Uint16("packetID", pubRec.PacketID))
 		return
@@ -187,7 +195,7 @@ func (i *InnerHandler) HandlePubRec(pubRec *packets.Pubrec) {
 
 func (i *InnerHandler) HandlePubComp(pubRel *packets.Pubcomp) {
 	c := i.client
-	topicName := c.identifierIDTopic[pubRel.PacketID]
+	topicName := c.packetIdentifierIDTopic[pubRel.PacketID]
 	if len(topicName) == 0 {
 		logger.Logger.Warn("pubComp packetID not found store", zap.String("client", c.MetaString()), zap.Uint16("packetID", pubRel.PacketID))
 		return
@@ -204,27 +212,19 @@ var (
 func (i *InnerHandler) HandlePing(_ *packets.Pingreq) {
 	i.client.RefreshAliveTime()
 	_ = i.client.WritePacket(pingResp)
-
 }
 
 func (i *InnerHandler) recoverTopicFromSession() {
 	var (
-		recoverTopics = map[string]topic2.Topic{}
-		getSession    = i.client.options.session
+		getSession = i.client.component.session
 	)
-	for topicName, subOption := range getSession.ReadSubTopics() {
-		logger.Logger.Debug("recover topic from getSession", zap.String("topic", topicName), zap.Any("subOption", subOption))
+	for _, topicMeta := range getSession.ReadSubTopics() {
+		var (
+			topicName = topicMeta.Topic
+		)
+		logger.Logger.Debug("recover topic from getSession", zap.Any("meta", topicMeta))
 		unfinishedMessage := getSession.ReadTopicUnFinishedMessage(topicName)
-		latestAckMessageID, _ := getSession.ReadTopicLatestPushedMessageID(topicName)
-		topic := topic.CreateTopicFromSession(i.client, &packets.SubOptions{
-			Topic:             topicName,
-			QoS:               byte(subOption.QoS),
-			NoLocal:           subOption.NoLocal,
-			RetainAsPublished: subOption.RetainAsPublished,
-		}, unfinishedMessage, latestAckMessageID)
-		recoverTopics[topicName] = topic
-	}
-	for topicName, t := range recoverTopics {
-		i.client.topicManager.AddTopic(topicName, t)
+		subTopic := topic.CreateTopicFromSession(i.client, &topicMeta, unfinishedMessage)
+		i.client.topicManager.AddTopic(topicName, subTopic)
 	}
 }

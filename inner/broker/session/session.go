@@ -1,35 +1,39 @@
 package session
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
-	"github.com/BAN1ce/Tree/proto"
 	"github.com/BAN1ce/skyTree/logger"
-	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/broker/session"
+	"github.com/BAN1ce/skyTree/pkg/broker/store"
+	"github.com/BAN1ce/skyTree/pkg/broker/topic"
 	"github.com/BAN1ce/skyTree/pkg/errs"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"go.uber.org/zap"
-	"strings"
 	"time"
 )
 
 type Session struct {
 	clientID string
-	store    *broker.KeyValueStoreWithTimeout
+	store    *store.KeyValueStoreWithTimeout
 }
 
-func newSession(clientID string, store broker.KeyStore) *Session {
-	return &Session{
+func newSession(ctx context.Context, clientID string, keyStore store.KeyStore) *Session {
+	logger.Logger.Debug("new session", zap.String("clientID", clientID))
+	s := &Session{
 		clientID: clientID,
-		store: broker.NewKeyValueStoreWithTimout(
-			store,
+		store: store.NewKeyValueStoreWithTimout(
+			keyStore,
 			3*time.Second),
 	}
+	if err := s.store.PutKey(ctx, clientSessionCreatedTimeKey(s.clientID), time.Now().String()); err != nil {
+		logger.Logger.Error("put key failed", zap.Error(err), zap.String("clientID", s.clientID))
+	}
+	return s
 }
 
 func (s *Session) Release() {
-
 	// delete session prefix key  like session/client/xxx
 	if err := s.store.DefaultDeleteKey(clientSessionPrefix(s.clientID)); err != nil {
 		logger.Logger.Error("release session failed", zap.Error(err), zap.String("clientID", s.clientID))
@@ -39,43 +43,41 @@ func (s *Session) Release() {
 // ----------------------------------------------------------------- Sub Topic ----------------------------------------------------------------- //
 
 // ReadSubTopics returns all sub topics of the client.
-func (s *Session) ReadSubTopics() (topics map[string]*proto.SubOption) {
-	topics = make(map[string]*proto.SubOption)
-	m, err := s.store.DefaultReadPrefixKey(clientSubTopicKeyPrefix(s.clientID))
+func (s *Session) ReadSubTopics() (topics []topic.Meta) {
+	m, err := s.store.DefaultReadPrefixKey(context.TODO(), clientSubTopicKeyPrefix(s.clientID))
 	if err != nil && !errors.Is(err, errs.ErrStoreKeyNotFound) {
 		logger.Logger.Error("read sub topics failed", zap.Error(err), zap.String("clientID", s.clientID))
 		return nil
 	}
-	for k, v := range m {
-		option := &proto.SubOption{}
+	if len(m) == 0 {
+		logger.Logger.Debug("no sub topics", zap.String("clientID", s.clientID))
+	}
+	for _, v := range m {
+		var meta *topic.Meta
 		// QoS should not greater than 2, so int is enough
-		if err := json.Unmarshal([]byte(v), option); err != nil {
+		if err := json.Unmarshal([]byte(v), &meta); err != nil {
 			logger.Logger.Error("unmarshal sub option failed", zap.Error(err), zap.String("clientID", s.clientID))
 			continue
 		}
-		if err != nil {
-			logger.Logger.Error("string to int32 failed", zap.Error(err), zap.String("clientID", s.clientID))
-			continue
-		}
-		if topic := strings.TrimPrefix(k, clientSubTopicKeyPrefix(s.clientID)); topic == "" {
-			logger.Logger.Error("trim prefix failed", zap.Error(err), zap.String("clientID", s.clientID))
-			continue
-		} else {
-			topics[topic] = option
-		}
+
+		topics = append(topics, *meta)
 	}
 	return
 }
 
 // CreateSubTopic creates a sub topic for the client. store the sub option to the session.
-func (s *Session) CreateSubTopic(topic string, option *proto.SubOption) {
-	if topic == "" {
+func (s *Session) CreateSubTopic(meta *topic.Meta) {
+	var (
+		topicName = meta.Topic
+	)
+	if topicName == "" {
+		logger.Logger.Error("topicName should not be empty", zap.String("clientID", s.clientID))
 		return
 	}
-	data, _ := json.Marshal(option)
-	if err := s.store.DefaultPutKey(clientSubTopicKey(s.clientID, topic), string(data)); err != nil {
-		logger.Logger.Error("create sub topic failed", zap.Error(err), zap.String("clientID", s.clientID),
-			zap.String("topic", topic), zap.Int32("qos", option.QoS))
+	data, _ := json.Marshal(meta)
+	if err := s.store.DefaultPutKey(clientSubTopicKey(s.clientID, topicName), string(data)); err != nil {
+		logger.Logger.Error("create sub topicName failed", zap.Error(err), zap.String("clientID", s.clientID),
+			zap.String("topicName", topicName), zap.Int32("qos", meta.QoS))
 	}
 }
 
@@ -135,7 +137,7 @@ func (s *Session) CreateTopicUnFinishedMessage(topic string, message []*packet.M
 func (s *Session) ReadTopicUnFinishedMessage(topic string) (message []*packet.Message) {
 	prefix := clientUnfinishedMessageKey(s.clientID, topic)
 
-	m, err := s.store.DefaultReadPrefixKey(prefix)
+	m, err := s.store.DefaultReadPrefixKey(context.TODO(), prefix)
 	if err != nil {
 		logger.Logger.Error("read topic unfinished message failed", zap.Error(err), zap.String("clientID", s.clientID))
 		return
@@ -226,6 +228,6 @@ func (s *Session) SetExpiryInterval(i int64) {
 }
 
 func (s *Session) GetExpiryInterval() int64 {
-	//TODO implement me
-	panic("implement me")
+	// TODO: implement me
+	return 0
 }

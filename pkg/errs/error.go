@@ -25,11 +25,13 @@ var (
 	ErrTopicAliasNotFound         = errors.New("topic alias not found")
 	ErrTopicAliasInvalid          = errors.New("topic alias invalid")
 	ErrPacketOversize             = errors.New("packet oversize")
+	ErrSubTopicEmpty              = errors.New("sub topic empty")
 )
 
 var (
 	ErrInvalidQoS                = errors.New("invalid qos")
 	ErrTopicNotExistsInSubTopics = errors.New("topic not exists in sub topics")
+	ErrTopicQoSNotSupport        = errors.New("topic qos not support")
 )
 
 var (

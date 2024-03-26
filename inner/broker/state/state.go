@@ -1,17 +1,19 @@
 package state
 
 import (
+	"context"
 	"github.com/BAN1ce/skyTree/pkg/broker"
+	"github.com/BAN1ce/skyTree/pkg/broker/store"
 	"time"
 )
 
 type State struct {
-	store *broker.KeyValueStoreWithTimeout
+	store *store.KeyValueStoreWithTimeout
 }
 
-func NewState(store broker.KeyStore) *State {
+func NewState(keyStore store.KeyStore) *State {
 	return &State{
-		store: broker.NewKeyValueStoreWithTimout(store, 3*time.Second),
+		store: store.NewKeyValueStoreWithTimout(keyStore, 3*time.Second),
 	}
 }
 
@@ -22,7 +24,7 @@ func (s *State) CreateTopicWillMessageID(topic, messageID, clientID string) erro
 func (s *State) ReadTopicWillMessageID(topic string) (map[string]string, error) {
 	var (
 		messageIDClientID = map[string]string{}
-		value, err        = s.store.DefaultReadPrefixKey(broker.TopicWillMessage(topic).String())
+		value, err        = s.store.DefaultReadPrefixKey(context.TODO(), broker.TopicWillMessage(topic).String())
 	)
 	if err != nil {
 		return messageIDClientID, err
@@ -40,7 +42,7 @@ func (s *State) DeleteTopicWillMessageID(topic, messageID string) error {
 func (s *State) ReadRetainMessageID(topic string) ([]string, error) {
 	var (
 		messageIDs []string
-		value, err = s.store.DefaultReadPrefixKey(broker.TopicRetainMessage(topic).String())
+		value, err = s.store.DefaultReadPrefixKey(context.TODO(), broker.TopicRetainMessage(topic).String())
 	)
 	if err != nil {
 		return messageIDs, err

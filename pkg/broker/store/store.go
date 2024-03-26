@@ -1,4 +1,4 @@
-package broker
+package store
 
 import (
 	"context"
@@ -59,8 +59,6 @@ func (s *KeyValueStoreWithTimeout) DefaultDeleteKey(key string) error {
 	return s.KeyStore.DeleteKey(ctx, key)
 }
 
-func (s *KeyValueStoreWithTimeout) DefaultReadPrefixKey(prefix string) (map[string]string, error) {
-	ctx, cancel := s.getCtx()
-	defer cancel()
+func (s *KeyValueStoreWithTimeout) DefaultReadPrefixKey(ctx context.Context, prefix string) (map[string]string, error) {
 	return s.KeyStore.ReadPrefixKey(ctx, prefix)
 }

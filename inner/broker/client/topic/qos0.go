@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
+	"github.com/BAN1ce/skyTree/pkg/broker/client"
 	"github.com/BAN1ce/skyTree/pkg/broker/session"
+	"github.com/BAN1ce/skyTree/pkg/broker/topic"
 	"github.com/BAN1ce/skyTree/pkg/packet"
-	"github.com/eclipse/paho.golang/packets"
 	"go.uber.org/zap"
 )
 
@@ -16,21 +17,21 @@ type QoS0 struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	topic         string
-	subOption     *packets.SubOptions
 	messageSource broker.MessageSource
-	client        broker.Client
+	client        *Client
+	meta          *topic.Meta
 }
 
 func (q *QoS0) GetUnfinishedMessage() []*session.UnFinishedMessage {
 	return nil
 }
 
-func NewQoS0(subOption *packets.SubOptions, writer broker.PacketWriter, messageSource broker.MessageSource) *QoS0 {
+func NewQoS0(meta *topic.Meta, writer client.PacketWriter, messageSource broker.MessageSource) *QoS0 {
 	q := &QoS0{
-		topic:         subOption.Topic,
-		subOption:     subOption,
+		topic:         meta.Topic,
+		meta:          meta,
 		messageSource: messageSource,
-		client:        NewClient(writer, subOption),
+		client:        NewClient(writer, meta),
 	}
 	return q
 }
@@ -53,11 +54,12 @@ func (q *QoS0) Start(ctx context.Context) error {
 		select {
 		case <-q.ctx.Done():
 			return nil
-		case p, ok := <-messageChan:
+		case msg, ok := <-messageChan:
 			if !ok {
 				return nil
 			}
-			_ = q.Publish(p)
+			msg.SetSubIdentifier(byte(q.meta.Identifier))
+			_ = q.Publish(msg)
 		}
 	}
 
@@ -85,4 +87,8 @@ func (q *QoS0) GetID() string {
 
 func (q *QoS0) GetUnFinishedMessage() []*packet.Message {
 	return q.client.GetUnFinishedMessage()
+}
+
+func (q *QoS0) Meta() topic.Meta {
+	return *q.meta
 }

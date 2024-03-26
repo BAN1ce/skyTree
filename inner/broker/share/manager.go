@@ -51,19 +51,19 @@ func NewManager(factory MessageSourceFactory) *Manager {
 	}
 }
 
-func (m *Manager) Sub(options packets.SubOptions, client broker.ShareClient) (topic.Topic, error) {
+func (m *Manager) Sub(meta *topic.Meta, client broker.ShareClient) (topic.Topic, error) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	var (
-		topicName = options.Topic
+		topicName = meta.Topic
 	)
-	topic, ok := m.topic[topicName]
+	subTopic, ok := m.topic[topicName]
 	if !ok {
-		topic = NewDispatch(topicName, "", m.messageSourceFactory.MakeMessageSource(topicName))
-		topic.Start(m.ctx)
-		m.topic[topicName] = topic
+		subTopic = NewDispatch(topicName, "", m.messageSourceFactory.MakeMessageSource(topicName))
+		subTopic.Start(m.ctx)
+		m.topic[topicName] = subTopic
 	}
-	t := topic.ShareTopicAddClient(client, options.QoS)
+	t, _ := subTopic.ShareTopicAddClient(client, meta)
 	return t, nil
 }
 

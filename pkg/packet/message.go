@@ -23,6 +23,13 @@ type Message struct {
 	State         int
 }
 
+func (m *Message) SetSubIdentifier(id byte) {
+	if m.PublishPacket.Properties == nil {
+		m.PublishPacket.Properties = &packets.Properties{}
+	}
+	m.PublishPacket.Properties.SubIDAvailable = &id
+}
+
 func (m *Message) SetPubReceived(received bool) {
 	if received {
 		m.State |= PubReceived

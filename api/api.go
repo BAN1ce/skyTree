@@ -2,25 +2,28 @@ package api
 
 import (
 	"context"
-	"github.com/BAN1ce/skyTree/api/base"
-	"github.com/BAN1ce/skyTree/api/session"
-	"github.com/BAN1ce/skyTree/api/store"
+	client2 "github.com/BAN1ce/skyTree/api/client"
+	"github.com/BAN1ce/skyTree/api/topic"
 	_ "github.com/BAN1ce/skyTree/docs"
-	"github.com/BAN1ce/skyTree/inner/broker/core"
-	"github.com/BAN1ce/skyTree/logger"
 	broker2 "github.com/BAN1ce/skyTree/pkg/broker"
 	session2 "github.com/BAN1ce/skyTree/pkg/broker/session"
-	"github.com/labstack/echo/v4"
+	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	echoSwagger "github.com/swaggo/echo-swagger"
-	"go.uber.org/zap"
+	"net/http"
+	_ "net/http/pprof"
 )
 
 type Option func(*API)
 
-func WithClientManager(manager *core.ClientManager) Option {
+func WithClientManager(manager client2.Manager) Option {
 	return func(api *API) {
 		api.manager = manager
+	}
+}
+
+func WithTopicManager(topicManager topic.Manager) Option {
+	return func(api *API) {
+		api.topicManager = topicManager
 	}
 }
 
@@ -38,11 +41,12 @@ func WithStore(store broker2.MessageStore) Option {
 
 type API struct {
 	addr           string
-	httpServer     *echo.Echo
-	apiV1          *echo.Group
-	manager        *core.ClientManager
+	httpServer     *gin.Engine
+	manager        client2.Manager
+	topicManager   topic.Manager
 	store          broker2.MessageStore
 	sessionManager session2.Manager
+	apiV1          *gin.RouterGroup
 }
 
 func NewAPI(addr string, option ...Option) *API {
@@ -55,38 +59,32 @@ func NewAPI(addr string, option ...Option) *API {
 	return api
 }
 func (a *API) Start(ctx context.Context) error {
-	a.httpServer = echo.New()
-	a.httpServer.Debug = false
-	a.httpServer.HideBanner = true
-	a.httpServer.HTTPErrorHandler = func(err error, ctx echo.Context) {
-		if err := ctx.JSON(500, base.WithError(err)); err != nil {
-			logger.Logger.Error("http error handler error", zap.Error(err))
-		}
-	}
+	r := gin.Default()
+	a.httpServer = r
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "ok",
+		})
+	})
 	a.route()
-	return a.httpServer.Start(a.addr)
+	return r.Run(a.addr)
 }
 
 func (a *API) route() {
-	a.httpServer.GET("/swagger/*", echoSwagger.WrapHandler)
-	a.httpServer.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
+	a.httpServer.GET("/debug/pprof/*filepath", gin.WrapH(http.DefaultServeMux))
+	a.httpServer.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	a.apiV1 = a.httpServer.Group("/api/v1")
-	a.apiV1.GET("/ping", func(ctx echo.Context) error {
-		return ctx.String(200, "pong")
-	})
-	a.storeAPI()
-	a.sessionAPI()
+	a.clientAPI()
 }
 
-func (a *API) storeAPI() {
-	ctr := store.NewController(a.store)
-	a.apiV1.GET("/store/message", ctr.Get)
-	a.apiV1.GET("/store/message/:id", ctr.Info)
+func (a *API) clientAPI() {
+	ctr := client2.NewController(a.manager)
+	a.apiV1.GET("/clients/:client_id", ctr.Info)
 }
-func (a *API) sessionAPI() {
-	ctr := session.NewController(a.sessionManager)
-	a.apiV1.GET("/session/:client_id", ctr.Info)
 
+func (a *API) topicAPI() {
+	ctr := topic.NewController(a.topicManager)
+	a.apiV1.GET("/topics/:topic", ctr.Info)
 }
 func (a *API) Name() string {
 	return "api"

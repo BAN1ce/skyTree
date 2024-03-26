@@ -11,13 +11,14 @@ type ClientManager struct {
 	clients map[UID]*client.Client
 }
 
-func NewClientManager() *ClientManager {
-	var (
-		c = &ClientManager{
-			clients: map[string]*client.Client{},
-		}
-	)
-	return c
+func NewClientManager() *client.Clients {
+	return client.NewClients()
+	//var (
+	//	c = &ClientManager{
+	//		clients: map[string]*client.Client{},
+	//	}
+	//)
+	//return c
 }
 
 func (c *ClientManager) CreateClient(client *client.Client) {

@@ -1,17 +1,9 @@
 package session
 
 import (
-	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/eclipse/paho.golang/packets"
 	"time"
 )
-
-type UnFinishedMessage struct {
-	Message     *packet.Message
-	MessageID   string
-	PacketID    string
-	PubReceived bool
-}
 
 type WillProperties struct {
 	*packets.Properties

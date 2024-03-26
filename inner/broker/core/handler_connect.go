@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	client2 "github.com/BAN1ce/skyTree/inner/broker/client"
 	"github.com/BAN1ce/skyTree/logger"
@@ -52,6 +53,10 @@ func (c *ConnectHandler) Handle(broker *Broker, client *client2.Client, rawPacke
 }
 
 func (c *ConnectHandler) handleUsernamePassword(_ *Broker, _ *client2.Client, packet *packets.Connect, conAck *packets.Connack) error {
+	if packet.UsernameFlag == false && packet.Username != "" {
+		conAck.ReasonCode = packets.ConnackBadUsernameOrPassword
+		return fmt.Errorf("username flag is false, but username is not empty error")
+	}
 	if (packet.UsernameFlag && packet.Username == "") || (packet.PasswordFlag && len(packet.Password) == 0) {
 		conAck.ReasonCode = packets.ConnackBadUsernameOrPassword
 		return fmt.Errorf("username or password is empty")
@@ -84,11 +89,11 @@ func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client
 	if cleanStart {
 		//  release old session
 		broker.ReleaseSession(clientID)
-		session = broker.sessionManager.NewClientSession(clientID)
-		broker.sessionManager.AddClientSession(clientID, session)
+		session = broker.sessionManager.NewClientSession(context.TODO(), clientID)
+		broker.sessionManager.AddClientSession(context.TODO(), clientID, session)
 		logger.Logger.Debug("create new session", zap.String("clientID", clientID))
 	} else {
-		session, exists = broker.sessionManager.ReadClientSession(clientID)
+		session, exists = broker.sessionManager.ReadClientSession(context.TODO(), clientID)
 		if exists {
 			if properties, err := session.GetConnectProperties(); err != nil {
 				return err
@@ -102,13 +107,13 @@ func (c *ConnectHandler) handleCleanStart(broker *Broker, client *client2.Client
 	}
 	if willCreate {
 		// create new session
-		session = broker.sessionManager.NewClientSession(clientID)
-		broker.sessionManager.AddClientSession(clientID, session)
+		session = broker.sessionManager.NewClientSession(context.TODO(), clientID)
+		broker.sessionManager.AddClientSession(context.TODO(), clientID, session)
 	} else {
 		connAck.SessionPresent = true
 	}
 
-	if err = client.SetWithOption(client2.WithSession(session), client2.WithKeepAliveTime(time.Second*time.Duration(packet.KeepAlive))); err != nil {
+	if err = client.SetComponent(client2.WithSession(session), client2.WithKeepAliveTime(time.Second*time.Duration(packet.KeepAlive))); err != nil {
 		connAck.ReasonCode = packets.ConnackServerUnavailable
 		return errs.ErrSetClientSession
 	}

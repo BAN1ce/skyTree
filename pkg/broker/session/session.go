@@ -1,7 +1,7 @@
 package session
 
 import (
-	"github.com/BAN1ce/Tree/proto"
+	"github.com/BAN1ce/skyTree/pkg/broker/topic"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/eclipse/paho.golang/packets"
 	"time"
@@ -32,8 +32,8 @@ type TopicManager interface {
 
 	TopicLatestPushedMessage
 
-	ReadSubTopics() (topics map[string]*proto.SubOption)
-	CreateSubTopic(topic string, option *proto.SubOption)
+	ReadSubTopics() (topics []topic.Meta)
+	CreateSubTopic(meta *topic.Meta)
 	DeleteSubTopic(topic string)
 }
 

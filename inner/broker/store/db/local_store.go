@@ -1,9 +1,11 @@
-package key
+package db
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/BAN1ce/skyTree/logger"
+	"github.com/BAN1ce/skyTree/pkg"
 	"github.com/BAN1ce/skyTree/pkg/broker"
 	"github.com/BAN1ce/skyTree/pkg/errs"
 	"github.com/BAN1ce/skyTree/pkg/packet"
@@ -207,7 +209,9 @@ func (s *Local) ReadPrefixKey(ctx context.Context, prefix string) (map[string]st
 		values = make(map[string]string)
 		err    error
 	)
-	logger.Logger.Debug("store read key", zap.String("key", prefix))
+	defer func() {
+		logger.Logger.Debug("store read prefix key", zap.String("key", prefix), zap.Any("values", values), zap.String("ctx", pkg.GetContextID(ctx)))
+	}()
 	if err = s.db.View(func(tx *nutsdb.Tx) error {
 		// TODO: limit number set 9999, it's dangerous
 		if entries, _, err := tx.PrefixScan(s.kvBucket, []byte(prefix), 0, 9999); err != nil {
@@ -220,7 +224,7 @@ func (s *Local) ReadPrefixKey(ctx context.Context, prefix string) (map[string]st
 		}
 	}); err != nil {
 		if errors.Is(err, nutsdb.ErrPrefixScan) {
-			return nil, errs.ErrStoreKeyNotFound
+			return nil, errors.Join(errs.ErrStoreKeyNotFound, fmt.Errorf("prefix key: %s", prefix))
 		}
 		return nil, err
 	}

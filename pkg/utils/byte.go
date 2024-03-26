@@ -9,9 +9,8 @@ func Int32ToByte(i int32) []byte {
 	return []byte(strconv.FormatInt(int64(i), 10))
 }
 
-func ByteToInt32(b []byte) int32 {
-	i, _ := strconv.Atoi(string(b))
-	return int32(i)
+func ByteToInt32(b byte) int32 {
+	return int32(b)
 }
 
 func WriteUint32(u uint32, b *bytes.Buffer) error {

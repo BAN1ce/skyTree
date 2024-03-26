@@ -1,6 +1,10 @@
 package utils
 
-import "strings"
+import (
+	"github.com/BAN1ce/Tree/proto"
+	"github.com/eclipse/paho.golang/packets"
+	"strings"
+)
 
 func SplitTopic(topic string) []string {
 	tmp := strings.Split(strings.Trim(topic, "/"), "/")
@@ -42,4 +46,12 @@ func ParseShareTopic(shareTopic string) (shareName, subTopic string) {
 
 func IsShareTopic(shareTopic string) bool {
 	return strings.HasPrefix(shareTopic, "$share/")
+}
+
+func SubOptionToProtoSubOption(options *packets.SubOptions) *proto.SubOption {
+	return &proto.SubOption{
+		QoS:               ByteToInt32(options.QoS),
+		NoLocal:           options.NoLocal,
+		RetainAsPublished: options.RetainAsPublished,
+	}
 }

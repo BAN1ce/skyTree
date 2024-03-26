@@ -6,7 +6,9 @@ import (
 	"github.com/BAN1ce/skyTree/config"
 	"github.com/BAN1ce/skyTree/logger"
 	"github.com/BAN1ce/skyTree/pkg/broker"
+	"github.com/BAN1ce/skyTree/pkg/broker/client"
 	"github.com/BAN1ce/skyTree/pkg/broker/session"
+	"github.com/BAN1ce/skyTree/pkg/broker/topic"
 	"github.com/BAN1ce/skyTree/pkg/packet"
 	"github.com/eclipse/paho.golang/packets"
 	"go.uber.org/zap"
@@ -17,16 +19,16 @@ type QoS1Option func(q *QoS1)
 
 func QoS1WithLatestMessageID(messageID string) QoS1Option {
 	return func(q *QoS1) {
-		q.meta.latestMessageID = messageID
+		q.meta.LatestMessageID = messageID
 	}
 }
 
 type QoS1 struct {
 	ctx               context.Context
 	cancel            context.CancelFunc
-	meta              *meta
+	meta              *topic.Meta
 	publishChan       chan *packet.Message
-	client            broker.Client
+	client            *WithRetryClient
 	messageSource     broker.MessageSource
 	unfinishedMessage []*packet.Message
 }
@@ -36,12 +38,10 @@ func (q *QoS1) GetUnfinishedMessage() []*session.UnFinishedMessage {
 	panic("implement me")
 }
 
-func NewQoS1(subOption *packets.SubOptions, writer broker.PacketWriter, messageSource broker.MessageSource, unfinishedMessage []*packet.Message, options ...QoS1Option) *QoS1 {
+func NewQoS1(meta *topic.Meta, writer client.PacketWriter, messageSource broker.MessageSource, unfinishedMessage []*packet.Message, options ...QoS1Option) *QoS1 {
 	q := &QoS1{
-		meta: &meta{
-			topic: subOption.Topic,
-		},
-		client:        NewQoSWithRetry(NewClient(writer, subOption), nil),
+		meta:          meta,
+		client:        NewQoSWithRetry(NewClient(writer, meta), nil),
 		messageSource: messageSource,
 	}
 	q.unfinishedMessage = unfinishedMessage
@@ -53,11 +53,11 @@ func NewQoS1(subOption *packets.SubOptions, writer broker.PacketWriter, messageS
 
 func (q *QoS1) Start(ctx context.Context) error {
 	q.ctx, q.cancel = context.WithCancel(ctx)
-	if q.meta.windowSize == 0 {
+	if q.meta.WindowSize == 0 {
 		// FIXME: config.GetTopic().WindowSize,use client or another config
-		q.meta.windowSize = config.GetTopic().WindowSize
+		q.meta.WindowSize = config.GetTopic().WindowSize
 	}
-	q.publishChan = make(chan *packet.Message, max(len(q.unfinishedMessage), q.meta.windowSize))
+	q.publishChan = make(chan *packet.Message, max(len(q.unfinishedMessage), q.meta.WindowSize))
 	//q.publishChan = make(chan *packet.Message, 0)
 
 	for _, msg := range FillUnfinishedMessage(q.ctx, q.unfinishedMessage, q.messageSource) {
@@ -84,16 +84,17 @@ func (q *QoS1) listenPublishChan() {
 			if !ok {
 				return
 			}
+			msg.SetSubIdentifier(byte(q.meta.Identifier))
 			if err := q.client.Publish(msg); err != nil {
 				logger.Logger.Warn("QoS1: publish error = ", zap.Error(err))
 			}
 			if !msg.IsFromSession() {
-				q.meta.latestMessageID = msg.MessageID
+				q.meta.LatestMessageID = msg.MessageID
 			}
 		default:
-			message, _, err := q.messageSource.NextMessages(q.ctx, q.meta.windowSize, q.meta.latestMessageID, false)
+			message, _, err := q.messageSource.NextMessages(q.ctx, q.meta.WindowSize, q.meta.LatestMessageID, false)
 			if err != nil {
-				logger.Logger.Error("QoS2: read store error = ", zap.Error(err), zap.String("store", q.meta.topic))
+				logger.Logger.Error("QoS2: read store error = ", zap.Error(err), zap.String("store", q.meta.Topic))
 				time.Sleep(delayTime)
 				delayTime *= 2
 				if delayTime > 5*time.Minute {
@@ -111,7 +112,7 @@ func (q *QoS1) listenPublishChan() {
 
 func (q *QoS1) writeToPublishChan(message *packet.Message) {
 	if err := q.Publish(message); err != nil {
-		logger.Logger.Warn("QoS1: write to publishChan error = ", zap.Error(err), zap.String("store", q.meta.topic))
+		logger.Logger.Warn("QoS1: write to publishChan error = ", zap.Error(err), zap.String("store", q.meta.Topic))
 	}
 }
 
@@ -136,11 +137,15 @@ func (q *QoS1) Publish(publish *packet.Message) error {
 	case q.publishChan <- publish:
 		return nil
 	default:
-		logger.Logger.Warn("QoS1: publishChan is full", zap.String("store", q.meta.topic))
+		logger.Logger.Warn("QoS1: publishChan is full", zap.String("store", q.meta.Topic))
 		return fmt.Errorf("QoS1: publishChan is full")
 	}
 }
 
 func (q *QoS1) GetUnFinishedMessage() []*packet.Message {
 	return q.client.GetUnFinishedMessage()
+}
+
+func (q *QoS1) Meta() topic.Meta {
+	return *q.meta
 }

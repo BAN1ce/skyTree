@@ -1,47 +1,66 @@
 package client
 
 import (
+	"fmt"
 	"github.com/BAN1ce/skyTree/api/base"
-	"github.com/BAN1ce/skyTree/inner/broker/core"
-	"github.com/labstack/echo/v4"
-	"net/http"
+	"github.com/BAN1ce/skyTree/inner/broker/client"
+	"github.com/BAN1ce/skyTree/pkg/broker/session"
+	"github.com/BAN1ce/skyTree/pkg/model"
+	"github.com/gin-gonic/gin"
 )
 
+type Manager interface {
+	ReadClient(clientID string) (*client.Client, bool)
+}
 type Controller struct {
-	core.ClientManager
+	clients Manager
 }
 
-func NewController(manager *core.ClientManager) *Controller {
+func NewController(clients Manager) *Controller {
 	return &Controller{
-		ClientManager: *manager,
+		clients: clients,
 	}
 }
 
-func (c *Controller) Info(ctx echo.Context) error {
-	//var (
-	//	req InfoRequest
-	//	err error
-	//)
-	//if err = ctx.Bind(&req); err != nil {
-	//	return err
-	//}
-	//client, ok := c.ReadClient(req.ID)
-	//if !ok {
-	//	return ctx.JSON(http.StatusOK, base.WithCode(api.CodeNotFound))
-	//} else {
-	//	//return ctx.JSON(http.StatusOK, base.WithData(client))
-	//}
-	return nil
-}
-
-func (c *Controller) Delete(ctx echo.Context) error {
+func (c *Controller) Info(g *gin.Context) {
 	var (
-		req DeleteRequest
-		err error
+		req     InfoReq
+		rspData model.Client
 	)
-	if err = ctx.Bind(&req); err != nil {
-		return err
+	if err := g.ShouldBindUri(&req); err != nil {
+		g.Error(err)
+		return
 	}
-	c.DeleteClient(req.ID)
-	return ctx.JSON(http.StatusOK, base.WithSuccess())
+	client, ok := c.clients.ReadClient(req.ClientID)
+	if !ok {
+		// TODO: use error value
+		g.Error(fmt.Errorf("client not found"))
+		return
+	}
+	rspData.Session = c.sessionToRsp(client.GetSession())
+	rspData.ID = client.ID
+	rspData.UID = client.UID
+	rspData.Meta = client.Meta()
+	g.JSON(200, base.WithData(rspData))
+}
+
+func (c *Controller) sessionToRsp(s session.Session) *model.Session {
+	var (
+		result = &model.Session{}
+	)
+	result.ExpiryInterval = s.GetExpiryInterval()
+	if properties, err := s.GetConnectProperties(); err == nil {
+		result.ConnectProperty = properties
+	}
+	if will, ok, err := s.GetWillMessage(); ok && err == nil {
+		result.WillMessage = will
+	}
+	topics := s.ReadSubTopics()
+	result.Topic = topics
+
+	return result
+}
+
+func (c *Controller) clientInfoToRsp() {
+
 }
