@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package proto_auth;
+
+option go_package = "github.com/BAN1ce/skyTree/proto/proto_auth";
+
+// AuthService 认证服务
+service AuthService {
+  // Authenticate 执行认证请求
+  rpc Authenticate(AuthRequest) returns (AuthResponse);
+}
+
+// AuthRequest 认证请求
+message AuthRequest {
+  string client_id = 1;           // 客户端ID
+  uint32 reason_code = 2;         // 原因码
+  string auth_method = 3;         // 认证方法
+  bytes auth_data = 4;            // 认证数据
+  string reason_string = 5;       // 原因字符串
+  repeated UserProperty user_properties = 6; // 用户属性
+}
+
+// AuthResponse 认证响应
+message AuthResponse {
+  uint32 reason_code = 1;         // 原因码
+  string auth_method = 2;         // 认证方法
+  bytes auth_data = 3;            // 认证数据
+  string reason_string = 4;      // 原因字符串
+  repeated UserProperty user_properties = 5; // 用户属性
+}
+
+// UserProperty 用户属性
+message UserProperty {
+  string key = 1;
+  string value = 2;
+}
+
+

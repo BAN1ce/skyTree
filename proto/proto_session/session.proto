@@ -1,0 +1,283 @@
+syntax = "proto3";
+
+package session;
+option go_package = "./;proto_session";
+
+// ============================================================================
+// Session 和 Client 相关消息定义
+// ============================================================================
+
+// UserProperty 表示用户属性键值对（支持重复键）
+message UserProperty {
+  string Key = 1 [json_name = "key"];
+  string Value = 2 [json_name = "value"];
+}
+
+// WillMessage 表示遗嘱消息
+message WillMessage {
+  // 遗嘱主题
+  string Topic = 1 [json_name = "topic"];
+  // 遗嘱消息内容
+  bytes Payload = 2 [json_name = "payload"];
+  // QoS
+  uint32 Qos = 3 [json_name = "qos"];
+  // 保留标志
+  bool Retain = 4 [json_name = "retain"];
+  // MQTT 5.0 遗嘱属性（已废弃，保留用于向后兼容）
+  map<string, string> Properties = 5 [json_name = "properties", deprecated = true];
+  // Content Type
+  optional string ContentType = 6 [json_name = "content_type"];
+  // Response Topic
+  optional string ResponseTopic = 7 [json_name = "response_topic"];
+  // Correlation Data
+  optional bytes CorrelationData = 8 [json_name = "correlation_data"];
+  // Message Expiry Interval (seconds)
+  optional uint32 MessageExpiry = 9 [json_name = "message_expiry"];
+  // User Properties (支持重复键)
+  repeated UserProperty UserProperties = 10 [json_name = "user_properties"];
+  // Payload Format Indicator
+  optional uint32 PayloadFormat = 11 [json_name = "payload_format"];
+  // Will Delay Interval (seconds)
+  optional uint32 WillDelayInterval = 12 [json_name = "will_delay_interval"];
+}
+
+// UnfinishedMessage 表示未完成的 QoS1/QoS2 消息
+message UnfinishedMessage {
+  // Message state for QoS flow
+  enum MessageState {
+    // For QoS1: waiting for PUBACK
+    WAITING_PUBACK = 0;
+    // For QoS2: waiting for PUBREC
+    WAITING_PUBREC = 1;
+    // For QoS2: received PUBREC, waiting for PUBCOMP (outgoing)
+    WAITING_PUBCOMP = 2;
+    // For QoS2: received PUBLISH, waiting for PUBREL (incoming)
+    WAITING_PUBREL = 3;
+  }
+
+  // Message UUID (from message store)
+  string MessageID = 1 [json_name = "message_id"];
+  
+  // MQTT Packet ID
+  uint32 PacketID = 2 [json_name = "packet_id"];
+  
+  // QoS level (1 or 2)
+  uint32 Qos = 3 [json_name = "qos"];
+  
+  // Current message state
+  MessageState State = 4 [json_name = "state"];
+  
+  // Subscribe topic (for outgoing messages)
+  optional string SubscribeTopic = 5 [json_name = "subscribe_topic"];
+  
+  // Direction: true for outgoing (broker to client), false for incoming (client to broker)
+  bool IsOutgoing = 6 [json_name = "is_outgoing"];
+  
+  // First publish timestamp (Unix microseconds)
+  int64 FirstPubTime = 7 [json_name = "first_pub_time"];
+
+  // Encoded MQTT PUBLISH control packet for incoming QoS2 messages waiting for PUBREL.
+  bytes PublishPacket = 8 [json_name = "publish_packet"];
+
+  // PUBREC reason code already sent for incoming QoS2 messages waiting for PUBREL.
+  uint32 AckReasonCode = 9 [json_name = "ack_reason_code"];
+}
+
+// OutgoingReplayCursor records the earliest downlink QoS1 delivery task that
+// must be replayed after reconnect. QoS1 does not need per-packet protocol
+// state because duplicate PUBLISH delivery is allowed by at-least-once
+// semantics.
+message OutgoingReplayCursor {
+  int64 TaskUnixMicro = 1 [json_name = "task_unix_micro"];
+  string TaskID = 2 [json_name = "task_id"];
+  int64 Generation = 3 [json_name = "generation"];
+}
+
+// Session 表示一个客户端会话，包含客户端信息和会话数据
+message Session {
+  string ClientID = 1 [json_name = "client_id"];
+  // 遗嘱消息
+  optional WillMessage WillMessage = 2 [json_name = "will_message"];
+  // Unfinished QoS2 and retained outgoing messages that require exact protocol restoration.
+  repeated UnfinishedMessage UnfinishedMessages = 3 [json_name = "unfinished_messages"];
+  // MQTT 5.0 Session Expiry Interval (seconds)
+  uint32 SessionExpiryInterval = 4 [json_name = "session_expiry_interval"];
+  // Offline expiry deadline. 0 means the session is online or never expires.
+  int64 ExpireAtUnixNano = 5 [json_name = "expire_at_unix_nano"];
+  // Earliest ordinary outgoing QoS1 delivery task to replay.
+  optional OutgoingReplayCursor OutgoingReplayCursor = 6 [json_name = "outgoing_replay_cursor"];
+}
+
+// SessionOwner 表示运行时 ownership / 路由状态。
+// 注意：它不是 MQTT session 语义的一部分，只是当前实现中用于显式隔离 runtime 状态。
+message SessionOwner {
+  string ClientID = 1 [json_name = "client_id"];
+  uint64 NodeID = 2 [json_name = "node_id"];
+  string OwnerToken = 3 [json_name = "owner_token"];
+  bool Online = 4 [json_name = "online"];
+}
+
+// ClusterSessions 表示集群中的所有会话
+message ClusterSessions {
+  map<string, Session> Sessions = 1;
+  map<string, SessionOwner> Owners = 2;
+}
+
+// ============================================================================
+// Session 管理请求类型
+// ============================================================================
+
+enum SessionRequestType {
+  OPEN_SESSION_FOR_CONNECT = 0;
+  TAKE_OVER_SESSION_OWNER = 1;
+  REPLACE_SESSION_STATE_ON_CLEAN_START = 2;
+  SAVE_OFFLINE_STATE = 3;
+  DELETE_SESSION = 4;
+  REMOVE_OUTGOING_UNFINISHED = 5;
+  DELETE_EXPIRED_SESSIONS = 6;
+  UPSERT_INCOMING_UNFINISHED = 7;
+  REMOVE_INCOMING_UNFINISHED = 8;
+  // Periodic in-flight commit of downlink delivery progress while the client is online.
+  // Unlike SAVE_OFFLINE_STATE it must not change owner online state or the offline expiry.
+  COMMIT_OUTGOING_PROGRESS = 9;
+}
+
+// SessionRequest 通用会话请求
+message SessionRequest {
+  string RequestID = 1;
+  SessionRequestType Type = 2;
+  bytes Data = 3;
+  int64 Time = 4;
+  string ClientID = 5;
+  uint64 RequestNodeID = 6;
+}
+
+// ============================================================================
+// 显式领域动作请求
+// ============================================================================
+
+message OpenSessionForConnectRequest {
+  string ClientID = 1;
+  optional WillMessage WillMessage = 2 [json_name = "will_message"];
+  uint32 SessionExpiryInterval = 3 [json_name = "session_expiry_interval"];
+  int64 NowUnixNano = 4 [json_name = "now_unix_nano"];
+}
+
+message OpenSessionForConnectResponse {
+  Session OldSession = 1;
+  bool OldSessionExists = 2;
+  Session Session = 3;
+}
+
+message TakeOverSessionOwnerRequest {
+  SessionOwner Owner = 1;
+}
+
+message TakeOverSessionOwnerResponse {
+  SessionOwner PreviousOwner = 1;
+  bool PreviousOwnerExists = 2;
+  SessionOwner Owner = 3;
+}
+
+message ReplaceSessionStateOnCleanStartRequest {
+  string ClientID = 1;
+  optional WillMessage WillMessage = 2 [json_name = "will_message"];
+  uint32 SessionExpiryInterval = 3 [json_name = "session_expiry_interval"];
+  int64 NowUnixNano = 4 [json_name = "now_unix_nano"];
+}
+
+message DeleteSessionRequest {
+  string ClientID = 1;
+}
+
+message DeleteExpiredSessionsRequest {
+  int64 NowUnixNano = 1 [json_name = "now_unix_nano"];
+}
+
+message DeleteExpiredSessionsResponse {
+  repeated string ClientIDs = 1 [json_name = "client_ids"];
+}
+
+message SaveOfflineStateRequest {
+  string ClientID = 1;
+  repeated UnfinishedMessage UnfinishedMessages = 2 [json_name = "unfinished_messages"];
+  optional WillMessage WillMessage = 3 [json_name = "will_message"];
+  bool ClearWill = 4 [json_name = "clear_will"];
+  uint32 SessionExpiryInterval = 5 [json_name = "session_expiry_interval"];
+  int64 NowUnixNano = 6 [json_name = "now_unix_nano"];
+  string OwnerToken = 7 [json_name = "owner_token"];
+  optional OutgoingReplayCursor OutgoingReplayCursor = 8 [json_name = "outgoing_replay_cursor"];
+}
+
+message RemoveOutgoingUnfinishedRequest {
+  string ClientID = 1;
+  string MessageID = 2 [json_name = "message_id"];
+  int64 NowUnixNano = 3 [json_name = "now_unix_nano"];
+}
+
+message UpsertIncomingUnfinishedRequest {
+  string ClientID = 1;
+  uint32 PacketID = 2 [json_name = "packet_id"];
+  UnfinishedMessage UnfinishedMessage = 3 [json_name = "unfinished_message"];
+  string OwnerToken = 4 [json_name = "owner_token"];
+  int64 NowUnixNano = 5 [json_name = "now_unix_nano"];
+}
+
+message RemoveIncomingUnfinishedRequest {
+  string ClientID = 1;
+  uint32 PacketID = 2 [json_name = "packet_id"];
+  string OwnerToken = 3 [json_name = "owner_token"];
+  int64 NowUnixNano = 4 [json_name = "now_unix_nano"];
+}
+
+// CommitOutgoingProgressRequest carries a compact snapshot of downlink delivery progress,
+// committed periodically while the client is online so an unexpected crash does not force a
+// full replay. It replaces only the outgoing portion of the session state:
+//   - OutgoingReplayCursor: earliest unacked ordinary QoS1 delivery task (position replay).
+//   - UnfinishedMessages: current in-flight QoS2/retained outgoing entries (stage-accurate
+//     restore via PacketID + state). Bounded by the downlink Receive Maximum window.
+// It must not touch the will, session expiry, incoming unfinished messages, or owner online state.
+message CommitOutgoingProgressRequest {
+  string ClientID = 1;
+  repeated UnfinishedMessage UnfinishedMessages = 2 [json_name = "unfinished_messages"];
+  optional OutgoingReplayCursor OutgoingReplayCursor = 3 [json_name = "outgoing_replay_cursor"];
+  string OwnerToken = 4 [json_name = "owner_token"];
+  int64 NowUnixNano = 5 [json_name = "now_unix_nano"];
+}
+
+// ============================================================================
+// 读取会话请求
+// ============================================================================
+
+message ReadSessionRequest {
+  string ClientID = 1;
+  int64 NowUnixNano = 2 [json_name = "now_unix_nano"];
+}
+
+message ReadSessionResponse {
+  Session Session = 1 [json_name = "session"];
+  bool Exist = 2 [json_name = "exist"];
+}
+
+message ReadSessionOwnerRequest {
+  string ClientID = 1;
+}
+
+message ReadSessionOwnerResponse {
+  SessionOwner Owner = 1 [json_name = "owner"];
+  bool Exist = 2 [json_name = "exist"];
+}
+
+message ReadSessionOwnersRequest {
+  repeated string ClientIDs = 1 [json_name = "client_ids"];
+}
+
+message ReadSessionOwnerItem {
+  string ClientID = 1 [json_name = "client_id"];
+  SessionOwner Owner = 2 [json_name = "owner"];
+  bool Exist = 3 [json_name = "exist"];
+}
+
+message ReadSessionOwnersResponse {
+  repeated ReadSessionOwnerItem Items = 1 [json_name = "items"];
+}

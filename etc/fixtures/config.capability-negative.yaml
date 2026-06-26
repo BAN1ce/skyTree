@@ -1,0 +1,110 @@
+console:
+  enabled: true
+  username: "admin"
+  password: "admin"
+
+broker:
+  listeners:
+    - tcp://localhost:1883
+  local_state:
+    data_dir: "./data/single-capability-negative"
+    snapshot_interval: "30s"
+    snapshot_entries: 10000
+  no_sub_topic_behavior: 0
+  connack:
+    receive_maximum: 65535
+    max_qos: 1
+    retain_available: 0
+    maximum_packet_size: 1048576
+    topic_alias_maximum: 10
+    wildcard_subscription_available: false
+    subscription_identifier_available: false
+    shared_subscription_available: true
+    server_keep_alive: 180
+    response_information: ""
+    server_reference: ""
+  client_rate:
+    enabled: true
+    messages_per_second: 10
+    window_size: 10
+logging:
+  level: info
+  file: "./logs/skyTree-capability-negative.log"
+  max_size: 100
+  max_age: 30
+  max_backups: 10
+  compress: true
+  gin_mode: release
+  gin_console_output: false
+  startup_report: true
+delivery:
+  wake_max_wait: 3m
+  wake_read_retry_max_attempts: 6
+  wake_read_retry_backoff_initial: 50ms
+  wake_read_retry_backoff_max: 1s
+  inflight_wait_tick: 1s
+storage:
+  driver: badger
+  message_expire_days: 1
+  delivery_queue:
+    driver: "single_node_badger"
+  payload:
+    driver: "single_node_badger"
+  cassandra:
+    hosts: ["127.0.0.1"]
+    port: 9042
+    keyspace: "skytree"
+    auto_create_table: true
+  redis:
+    address: localhost:6379
+    connect_timeout: 1s
+    db: 0
+    idle_timeout: 60s
+    max_active: 100
+    max_idle: 10
+    password: ''
+    read_timeout: 1s
+    write_timeout: 1s
+  badger:
+    path: "./data/badger-capability-negative"
+
+server:
+  port: 9526
+
+cluster:
+  enable: false
+  join: false
+  data_dir: "./data/raft-capability-negative"
+  local_node_address: "127.0.0.1:8080"
+  local_node_id: 1
+  write_timeout: 5s
+  member:
+    1: "127.0.0.1:8080"
+  grpc:
+    addr: "127.0.0.1:8091"
+    endpoint: "127.0.0.1:8091"
+  health_check:
+    enabled: true
+    interval: 30s
+    timeout: 5s
+    max_retries: 3
+
+plugins:
+  metric:
+    enabled: true
+  auth:
+    enabled: false
+    auth:
+      enabled: false
+      http_endpoint: ""
+      grpc_endpoint: ""
+      timeout: 5
+  acl:
+    enabled: false
+    file: ""
+    keystore_key: "acl:rules"
+    default_deny: true
+    reload_interval: "0s"
+    admin_username: ""
+    admin_password: ""
+  custom: []

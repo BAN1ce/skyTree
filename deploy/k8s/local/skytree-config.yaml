@@ -1,0 +1,121 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: skytree-config
+  namespace: skytree-local
+data:
+  config.yaml: |
+    console:
+      enabled: true
+      username: admin
+      password: secret
+      control:
+        enabled: true
+        provider: k8s
+        timeout: 3s
+        k8s:
+          namespace: skytree-local
+          label_selector: app=skytree
+          service_name: skytree-headless
+          raft_port: 8080
+          grpc_port: 8091
+          request_timeout: 3s
+          join_timeout: 10s
+
+    broker:
+      listeners:
+        - tcp://0.0.0.0:1883
+      message_retry:
+        scheduler_interval: 1s
+      keep_alive_seconds: 60
+      keep_alive_scan_interval: 10s
+      connack:
+        server_keep_alive: 60
+      no_sub_topic_behavior: 0
+      client_rate:
+        enabled: true
+        messages_per_second: 10
+        window_size: 10
+
+    logging:
+      level: debug
+      file: "/app/data/logs/skytree.log"
+      max_size: 100
+      max_age: 30
+      max_backups: 10
+      compress: true
+
+    delivery:
+      wake_max_wait: 3m
+      wake_read_retry_max_attempts: 6
+      wake_read_retry_backoff_initial: 50ms
+      wake_read_retry_backoff_max: 1s
+      inflight_wait_tick: 1s
+
+    storage:
+      driver: badger
+      message_expire_days: 1
+      delivery_queue:
+        driver: "scylla"
+      payload:
+        driver: "scylla"
+      cassandra:
+        hosts: ["scylla"]
+        port: 9042
+        keyspace: "skytree"
+        consistency: "LOCAL_QUORUM"
+        timeout: 10s
+        connect_timeout: 10s
+        num_conns: 8
+        auto_create_table: true
+      redis:
+        address: localhost:6379
+        connect_timeout: 1s
+        db: 0
+        idle_timeout: 60s
+        max_active: 100
+        max_idle: 10
+        password: ''
+        read_timeout: 1s
+        write_timeout: 1s
+      badger:
+        path: "/app/data/badger"
+
+    server:
+      port: 9526
+
+    cluster:
+      enable: true
+      join: false
+      data_dir: "/app/data/raft"
+      local_node_address: "${NODE_NAME}:8080"
+      local_node_id: 1
+      write_timeout: 5s
+      member:
+        1: "skytree-0.skytree-headless.skytree-local.svc.cluster.local:8080"
+        2: "skytree-1.skytree-headless.skytree-local.svc.cluster.local:8080"
+        3: "skytree-2.skytree-headless.skytree-local.svc.cluster.local:8080"
+      grpc:
+        addr: "0.0.0.0:8091"
+        endpoint: "${NODE_NAME}:8091"
+        allow_insecure: true
+      health_check:
+        enabled: true
+        interval: 30s
+        timeout: 5s
+        max_retries: 3
+
+    plugins:
+      metric:
+        enabled: true
+      auth:
+        enabled: false
+      acl:
+        enabled: false
+        file: ""
+        keystore_key: "acl:rules"
+        default_deny: true
+        reload_interval: "0s"
+        admin_username: ""
+        admin_password: ""
+      custom: []

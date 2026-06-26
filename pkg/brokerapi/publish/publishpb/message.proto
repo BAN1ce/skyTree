@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package publishpb;
+option go_package = "github.com/BAN1ce/skyTree/pkg/brokerapi/publish/publishpb;publishpb";
+
+message StorePublishMessage  {
+  string MessageID = 1;
+  bytes PublishPacket = 2;
+  bool PubReceived = 3;
+  int64 CreatedTime = 4;
+  int64  ExpiredTime = 5;
+  string SenderID = 6;
+}
+
+
+message BatchStorePublishMessage{
+  repeated StorePublishMessage Message = 1;
+}

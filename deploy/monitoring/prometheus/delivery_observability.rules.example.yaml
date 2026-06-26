@@ -1,0 +1,106 @@
+groups:
+  - name: mqtt-delivery-observability
+    rules:
+      - alert: MQTTDeliveryEnqueueDelayHigh
+        expr: |
+          histogram_quantile(0.95, sum by (le, path, qos) (rate(skytree_delivery_enqueue_delay_seconds_bucket[5m]))) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: MQTT delivery enqueue p95 latency is high
+          description: Persistent delivery enqueue p95 latency is above 100ms.
+
+      - alert: MQTTDeliveryEnqueueDelayCritical
+        expr: |
+          histogram_quantile(0.95, sum by (le, path, qos) (rate(skytree_delivery_enqueue_delay_seconds_bucket[5m]))) > 0.3
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: MQTT delivery enqueue p95 latency is critical
+          description: Persistent delivery enqueue p95 latency is above 300ms.
+
+      - alert: MQTTDeliveryWakeDelayHigh
+        expr: |
+          histogram_quantile(0.95, sum by (le, path, mode) (rate(skytree_delivery_wake_delay_seconds_bucket[5m]))) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: MQTT delivery wake p95 latency is high
+          description: Delivery wake p95 latency is above 200ms.
+
+      - alert: MQTTDeliveryWakeDelayCritical
+        expr: |
+          histogram_quantile(0.95, sum by (le, path, mode) (rate(skytree_delivery_wake_delay_seconds_bucket[5m]))) > 1
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: MQTT delivery wake p95 latency is critical
+          description: Delivery wake p95 latency is above 1s.
+
+      - alert: MQTTDeliveryFirstSendDelayHigh
+        expr: |
+          histogram_quantile(0.95, sum by (le, path, qos) (rate(skytree_delivery_first_send_delay_seconds_bucket[5m]))) > 1.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: MQTT delivery first send p95 latency is high
+          description: First send p95 latency is above 1.5s.
+
+      - alert: MQTTDeliveryFirstSendDelayCritical
+        expr: |
+          histogram_quantile(0.95, sum by (le, path, qos) (rate(skytree_delivery_first_send_delay_seconds_bucket[5m]))) > 3
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: MQTT delivery first send p95 latency is critical
+          description: First send p95 latency is above 3s.
+
+      - alert: MQTTDeliveryRetransmitRateHigh
+        expr: |
+          sum(rate(skytree_delivery_send_attempts_total{attempt="retransmit"}[5m]))
+          /
+          clamp_min(sum(rate(skytree_delivery_send_attempts_total[5m])), 0.000001) > 0.02
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: MQTT delivery retransmit rate is high
+          description: Delivery retransmit rate is above 2%.
+
+      - alert: MQTTDeliveryRetransmitRateCritical
+        expr: |
+          sum(rate(skytree_delivery_send_attempts_total{attempt="retransmit"}[5m]))
+          /
+          clamp_min(sum(rate(skytree_delivery_send_attempts_total[5m])), 0.000001) > 0.05
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: MQTT delivery retransmit rate is critical
+          description: Delivery retransmit rate is above 5%.
+
+      - alert: MQTTDeliveryAckDelayHigh
+        expr: |
+          histogram_quantile(0.95, sum by (le, path, qos, result) (rate(skytree_delivery_ack_delay_seconds_bucket[5m]))) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: MQTT delivery ACK p95 latency is high
+          description: Terminal ACK p95 latency is above 5s.
+
+      - alert: MQTTDeliveryAckDelayCritical
+        expr: |
+          histogram_quantile(0.95, sum by (le, path, qos, result) (rate(skytree_delivery_ack_delay_seconds_bucket[5m]))) > 12
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: MQTT delivery ACK p95 latency is critical
+          description: Terminal ACK p95 latency is above 12s.

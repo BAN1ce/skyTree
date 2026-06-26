@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package event;
+option go_package = "./;proto_event";
+
+
+enum RequestType {
+  ADD_LISTENER = 0;
+  DELETE_LISTENER = 1;
+  EMIT_EVENT = 2;
+
+}
+
+message Request {
+  string ID = 1;
+  RequestType Type = 2;
+  bytes Data = 3;
+  int64 Time = 4;
+  reserved 5; // EventName was removed; local event names are derived from topic(s).
+  uint64 RequestNodeID = 6;
+}
+
+message Response {
+  string ID = 1;
+  RequestType Type = 2;
+  bool Result = 3;
+  repeated uint64 ListenNodes = 4;
+  int64 Time = 5;
+}
+
+
+// request for adding listener for node
+message AddListenerRequest {
+  string Name = 1;
+  uint64 NodeID = 2;
+  bool Once = 4;
+}
+
+// request for deleting listener for node
+message DeleteListenerRequest {
+  string Name = 1;
+  uint64 NodeID = 2;
+  string Node = 3;
+}
+
+
+// request for getting listener for node
+
+message ReadEventListenerRequest{
+  string EventName = 1;
+}
+
+message ReadEventListenerResponse{
+  repeated uint64  Nodes = 1;
+}
+
+// publish done
+
+message PublishDoneRequest{
+  uint64 NodeID = 1;
+  string Name = 2;
+  bytes Data = 3;
+}
+
+

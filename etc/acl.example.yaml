@@ -1,0 +1,27 @@
+default_deny: true
+
+rules:
+  # Admin: allow everything except $SYS by default (example).
+  - identity:
+      username: "admin"
+    allow:
+      pub:
+        - "#"
+      sub:
+        - "#"
+    deny:
+      pub:
+        - "$SYS/#"
+      sub:
+        - "$SYS/#"
+
+  # Regular user: only allow topics under user/<clientID>/...
+  - identity:
+      username: "user"
+    allow:
+      pub:
+        - "user/+/#"
+      sub:
+        - "user/+/#"
+
+

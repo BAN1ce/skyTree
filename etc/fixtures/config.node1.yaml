@@ -1,0 +1,80 @@
+# Local 3-node cluster config (node1). Fixture for compatibility tests.
+broker:
+  listeners:
+    - tcp://localhost:1883
+  no_sub_topic_behavior: 0
+  client_rate:
+    enabled: true
+    messages_per_second: 10
+    window_size: 10
+logging:
+  level: debug
+  file: "./logs/skyTree-node1.log"
+  max_size: 100
+  max_age: 30
+  max_backups: 10
+  compress: true
+delivery:
+  wake_max_wait: 3m
+  wake_read_retry_max_attempts: 6
+  wake_read_retry_backoff_initial: 50ms
+  wake_read_retry_backoff_max: 1s
+  inflight_wait_tick: 1s
+storage:
+  driver: badger
+  message_expire_days: 1
+  delivery_queue:
+    driver: "scylla"
+  payload:
+    driver: "scylla"
+  cassandra:
+    hosts: ["127.0.0.1"]
+    port: 9042
+    keyspace: "skytree"
+    auto_create_table: true
+  redis:
+    address: localhost:6379
+    connect_timeout: 1s
+    db: 0
+    idle_timeout: 60s
+    max_active: 100
+    max_idle: 10
+    password: ''
+    read_timeout: 1s
+    write_timeout: 1s
+  badger:
+    # Use a dedicated path for local cluster runs to avoid conflicts with existing data.
+    path: "./data/badger2_local"
+
+server:
+  port: 9526
+
+cluster:
+  enable: true
+  join: false
+  # Use a dedicated data_dir for local cluster runs to avoid bootstrap conflicts with existing raft data.
+  data_dir: "./data/raft2_local"
+  local_node_address: "127.0.0.1:8080"
+  local_node_id: 1
+  write_timeout: 5s
+  # Full membership is required at startup so new nodes can join later.
+  member:
+    1: "127.0.0.1:8080"
+    2: "127.0.0.1:8081"
+    3: "127.0.0.1:8082"
+  grpc:
+    addr: "127.0.0.1:8091"
+    endpoint: "127.0.0.1:8091"
+    allow_insecure: true
+  health_check:
+    enabled: true
+    interval: 30s
+    timeout: 5s
+    max_retries: 3
+
+plugins:
+  metric:
+    enabled: true
+  auth:
+    enabled: false
+  custom: []

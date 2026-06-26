@@ -1,0 +1,61 @@
+### Health
+GET http://localhost:9526/health
+Accept: application/json
+
+###
+### Liveness
+GET http://localhost:9526/health/liveness
+Accept: application/json
+
+###
+### Readiness
+GET http://localhost:9526/health/readiness
+Accept: application/json
+
+###
+### Startup
+GET http://localhost:9526/health/startup
+Accept: application/json
+
+###
+### Metrics
+GET http://localhost:9526/metrics
+
+###
+### ACL Ruleset (requires Basic Auth)
+GET http://localhost:9526/api/v1/acl/ruleset
+Authorization: Basic {{acl_basic_auth}}
+Accept: application/json
+
+###
+### Put ACL Ruleset (requires Basic Auth)
+PUT http://localhost:9526/api/v1/acl/ruleset
+Authorization: Basic {{acl_basic_auth}}
+Content-Type: application/json
+
+{
+  "version": "v1",
+  "rules": [
+    {
+      "identity": {
+        "username": "demo-user"
+      },
+      "allow_publish": [
+        "demo/#"
+      ],
+      "allow_subscribe": [
+        "demo/#"
+      ]
+    }
+  ]
+}
+
+###
+### Cluster Health Summary
+GET http://localhost:9526/api/v1/cluster/health
+Accept: application/json
+
+###
+### Cluster Overview (leader/replication/backlog)
+GET http://localhost:9526/api/v1/cluster/overview
+Accept: application/json

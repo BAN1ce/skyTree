@@ -1,0 +1,269 @@
+# 大规模压测K8s部署配置
+# 支持100万客户端和200万topic的分布式压测
+
+---
+# 1. 大规模SkyTree集群部署
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: skytree-large-scale
+  namespace: mqtt-stress
+  labels:
+    app: skytree
+    tier: broker
+spec:
+  serviceName: skytree-headless
+  replicas: 10  # 10个broker节点
+  selector:
+    matchLabels:
+      app: skytree
+  template:
+    metadata:
+      labels:
+        app: skytree
+        tier: broker
+    spec:
+      containers:
+      - name: skytree
+        image: skytree:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 1883
+          name: mqtt-tcp
+          protocol: TCP
+        - containerPort: 1884
+          name: mqtt-tcp-2
+          protocol: TCP
+        - containerPort: 1885
+          name: mqtt-tcp-3
+          protocol: TCP
+        - containerPort: 8080
+          name: mqtt-ws
+          protocol: TCP
+        - containerPort: 9526
+          name: http-api
+          protocol: TCP
+        - containerPort: 8091
+          name: grpc
+          protocol: TCP
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "8Gi"
+            cpu: "4000m"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config.yaml
+          subPath: config.yaml
+        - name: data-volume
+          mountPath: /app/data
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9526
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9526
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: config-volume
+        configMap:
+          name: skytree-large-scale-config
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: skytree-data
+  volumeClaimTemplates:
+  - metadata:
+      name: skytree-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 50Gi
+      storageClassName: alicloud-disk-ssd
+
+---
+# 2. 负载均衡服务
+apiVersion: v1
+kind: Service
+metadata:
+  name: skytree-loadbalancer
+  namespace: mqtt-stress
+  labels:
+    app: skytree
+  annotations:
+    service.beta.kubernetes.io/alicloud-loadbalancer-spec: "slb.s3.large"
+    service.beta.kubernetes.io/alicloud-loadbalancer-address-type: "internet"
+    service.beta.kubernetes.io/alicloud-loadbalancer-force-override-listeners: "true"
+    # 启用会话保持，确保连接粘性
+    service.beta.kubernetes.io/alicloud-loadbalancer-persistence-timeout: "3600"
+spec:
+  type: LoadBalancer
+  sessionAffinity: ClientIP  # 基于客户端IP的会话保持
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+  ports:
+  - port: 1883
+    targetPort: 1883
+    name: mqtt-tcp
+    protocol: TCP
+  - port: 1884
+    targetPort: 1884
+    name: mqtt-tcp-2
+    protocol: TCP
+  - port: 1885
+    targetPort: 1885
+    name: mqtt-tcp-3
+    protocol: TCP
+  - port: 8080
+    targetPort: 8080
+    name: mqtt-ws
+    protocol: TCP
+  - port: 9526
+    targetPort: 9526
+    name: http-api
+    protocol: TCP
+  selector:
+    app: skytree
+
+---
+# 3. 分布式压测客户端部署
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mqtt-stress-clients
+  namespace: mqtt-stress
+  labels:
+    app: mqtt-stress
+spec:
+  replicas: 20  # 20个压测客户端Pod
+  selector:
+    matchLabels:
+      app: mqtt-stress
+  template:
+    metadata:
+      labels:
+        app: mqtt-stress
+    spec:
+      containers:
+      - name: emqtt-bench
+        image: emqx/emqtt-bench:latest
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          # 每个Pod负责5万连接
+          CONNECTIONS_PER_POD=50000
+          TOPICS_PER_POD=100000
+          BROKER_HOST=skytree-loadbalancer.mqtt-stress.svc.cluster.local
+          BROKER_PORT=1883
+          
+          # 启动连接测试
+          emqtt_bench conn -h $BROKER_HOST -p $BROKER_PORT -c $CONNECTIONS_PER_POD \
+            --ifaddr 0.0.0.0 \
+            --conn-interval 1ms \
+            --keepalive 300 &
+          
+          # 启动发布测试
+          emqtt_bench pub -h $BROKER_HOST -p $BROKER_PORT -c 1000 \
+            -t "stress/test/{{.ClientID}}" \
+            -m "stress test message" \
+            --pub-interval 10ms \
+            --qos 0 &
+          
+          # 启动订阅测试
+          emqtt_bench sub -h $BROKER_HOST -p $BROKER_PORT -c $CONNECTIONS_PER_POD \
+            -t "stress/test/{{.ClientID}}" \
+            --qos 0 &
+          
+          wait
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+
+---
+# 4. 监控和指标收集
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mqtt-monitor
+  namespace: mqtt-stress
+  labels:
+    app: mqtt-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mqtt-monitor
+  template:
+    metadata:
+      labels:
+        app: mqtt-monitor
+    spec:
+      containers:
+      - name: prometheus
+        image: prom/prometheus:latest
+        ports:
+        - containerPort: 9090
+          name: prometheus
+        volumeMounts:
+        - name: prometheus-config
+          mountPath: /etc/prometheus
+      - name: grafana
+        image: grafana/grafana:latest
+        ports:
+        - containerPort: 3000
+          name: grafana
+        env:
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          value: "admin123"
+      volumes:
+      - name: prometheus-config
+        configMap:
+          name: prometheus-config
+
+---
+# 5. 命名空间
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mqtt-stress
+  labels:
+    name: mqtt-stress

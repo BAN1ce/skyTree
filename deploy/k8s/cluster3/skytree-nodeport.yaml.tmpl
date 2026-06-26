@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: skytree-nodeport
+  namespace: ${NAMESPACE}
+  labels:
+    app: skytree
+spec:
+  type: NodePort
+  ports:
+  - port: 1883
+    targetPort: 1883
+    nodePort: ${NODEPORT_MQTT}
+    name: mqtt-tcp
+    protocol: TCP
+  - port: 9526
+    targetPort: 9526
+    nodePort: ${NODEPORT_HTTP}
+    name: http-api
+    protocol: TCP
+  selector:
+    app: skytree
+
+
+
+
+

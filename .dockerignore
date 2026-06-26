@@ -1,0 +1,64 @@
+# Git相关
+.git
+.gitignore
+.gitattributes
+
+# 开发工具
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# 测试和覆盖率
+coverage.out
+*.test
+*.prof
+
+# 构建产物
+skytree
+!.docker-build/
+!.docker-build/skytree
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 数据目录
+data_*/
+data_wal_*/
+
+# 日志文件
+*.log
+logs/
+
+# 临时文件
+tmp/
+temp/
+.tmp/
+
+# 依赖目录
+vendor/
+web/console/node_modules/
+
+# 文档
+*.md
+docs/
+examples/
+
+# 脚本
+*.sh
+scripts/
+
+# 配置文件（除了生产配置）
+configs/config.example.yaml
+configs/config2.yaml
+
+# Mock文件
+mocks/
+*_mock.go
+
+# 其他
+.DS_Store
+Thumbs.db
+*.orig

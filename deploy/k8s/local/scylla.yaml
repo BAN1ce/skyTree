@@ -1,0 +1,149 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: scylla
+  namespace: skytree-local
+spec:
+  selector:
+    app: scylla
+  ports:
+    - name: cql
+      port: 9042
+      targetPort: 9042
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: scylla-headless
+  namespace: skytree-local
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: scylla
+  ports:
+    - name: cql
+      port: 9042
+      targetPort: 9042
+    - name: intra-node
+      port: 7000
+      targetPort: 7000
+    - name: ssl-intra-node
+      port: 7001
+      targetPort: 7001
+    - name: jmx
+      port: 7199
+      targetPort: 7199
+    - name: api
+      port: 10000
+      targetPort: 10000
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: scylla
+  namespace: skytree-local
+spec:
+  serviceName: scylla-headless
+  podManagementPolicy: Parallel
+  replicas: 3
+  selector:
+    matchLabels:
+      app: scylla
+  template:
+    metadata:
+      labels:
+        app: scylla
+    spec:
+      containers:
+        - name: scylla
+          image: scylladb/scylla:5.4
+          command:
+            - /usr/bin/scylla
+          args:
+            - --developer-mode=1
+            - --overprovisioned
+            - --options-file
+            - /etc/scylla/scylla.yaml
+            - --smp
+            - "1"
+            - --memory
+            - 500M
+            - --listen-address
+            - "$(POD_IP)"
+            - --broadcast-address
+            - "$(POD_IP)"
+            - --seed-provider-parameters
+            - "seeds=scylla-0.scylla-headless.$(POD_NAMESPACE).svc.cluster.local,scylla-1.scylla-headless.$(POD_NAMESPACE).svc.cluster.local,scylla-2.scylla-headless.$(POD_NAMESPACE).svc.cluster.local"
+            - --rpc-address
+            - "0.0.0.0"
+            - --broadcast-rpc-address
+            - "$(POD_IP)"
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          ports:
+            - name: cql
+              containerPort: 9042
+            - name: intra-node
+              containerPort: 7000
+            - name: ssl-intra-node
+              containerPort: 7001
+            - name: jmx
+              containerPort: 7199
+            - name: api
+              containerPort: 10000
+          resources:
+            requests:
+              cpu: "500m"
+              memory: 512Mi
+            limits:
+              memory: 576Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/scylla
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -ec
+                - cqlsh 127.0.0.1 9042 -e 'DESCRIBE KEYSPACES' >/dev/null 2>&1
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 20Gi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: scylla-init
+  namespace: skytree-local
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: scylla-init
+          image: scylladb/scylla:5.4
+          command:
+            - /bin/bash
+            - -ec
+            - |
+              until cqlsh scylla 9042 -e 'DESCRIBE KEYSPACES' >/dev/null 2>&1; do
+                sleep 2
+              done
+              cqlsh scylla 9042 -e "CREATE KEYSPACE IF NOT EXISTS skytree WITH replication = {'class': 'NetworkTopologyStrategy', 'datacenter1': 3};"

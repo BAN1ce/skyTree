@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: skytree-config
+  namespace: default
+  labels:
+    app: skytree
+data:
+  config.yaml: |
+    broker:
+      listeners:
+        - tcp://0.0.0.0:1883
+        - ws://0.0.0.0:8080
+        - wss://0.0.0.0:8081
+      message_retry:
+        scheduler_interval: 1s
+      no_sub_topic_behavior: 0
+    logging:
+      level: debug
+    storage:
+      driver: badger
+      message_expire_days: 1
+      redis:
+        address: redis-service:6379
+        connect_timeout: 1s
+        db: 0
+        idle_timeout: 60s
+        max_active: 100
+        max_idle: 10
+        password: ''
+        read_timeout: 1s
+        write_timeout: 1s
+      badger:
+        path: "/app/data/badger"
+    server:
+      port: 9526
+    cluster:
+      enable: true
+      join: false
+      data_dir: "/app/data"
+      local_node_address: "0.0.0.0:8080"
+      local_node_id: 1
+      write_timeout: 5s
+      member:
+        1: "skytree-0.skytree-headless:8080"
+        2: "skytree-1.skytree-headless:8080"
+        3: "skytree-2.skytree-headless:8080"
+      grpc:
+        addr: "0.0.0.0:8091"
+        # reachable address (advertise) used by other nodes to dial this pod (expanded at runtime)
+        endpoint: "${HOSTNAME}.skytree-headless:8091"
+        allow_insecure: false
+      health_check:
+        enabled: true
+        interval: 30s
+        timeout: 5s
+        max_retries: 3

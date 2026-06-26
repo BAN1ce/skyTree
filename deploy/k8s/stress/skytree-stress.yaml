@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: skytree-stress
+  namespace: mqtt-stress
+spec:
+  serviceName: skytree-headless
+  replicas: 10
+  selector:
+    matchLabels:
+      app: skytree
+      tier: broker
+  template:
+    metadata:
+      labels:
+        app: skytree
+        tier: broker
+    spec:
+      containers:
+        - name: skytree
+          image: skytree:stress
+          ports:
+            - name: mqtt
+              containerPort: 1883
+            - name: http
+              containerPort: 9526
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /health/startup
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24

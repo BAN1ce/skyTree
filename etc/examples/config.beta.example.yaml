@@ -1,0 +1,148 @@
+# SkyTree beta 推荐配置模板。
+# 目标：作为“代码层 beta 上线准备”的安全基线示例，而不是直接可用的生产最终值。
+
+server:
+  port: 9526
+  tls:
+    enabled: true
+    cert_file: "/etc/skytree/tls/api/tls.crt"
+    key_file: "/etc/skytree/tls/api/tls.key"
+    ca_file: ""
+    reload_interval: "5m"
+    mtls_auth_mode: "off"
+
+console:
+  enabled: false
+  username: ""
+  password: ""
+  control:
+    enabled: false
+    provider: "k8s"
+    timeout: "3s"
+    k8s:
+      namespace: "skytree-beta"
+      label_selector: "app=skytree"
+      service_name: "skytree-headless"
+      raft_port: 8080
+      grpc_port: 8091
+      request_timeout: "3s"
+      join_timeout: "10s"
+
+broker:
+  listeners:
+    - "tcp://0.0.0.0:1883"
+    - "tls://0.0.0.0:8883"
+    - "wss://0.0.0.0:8081"
+  tls:
+    enabled: true
+    cert_file: "/etc/skytree/tls/broker/tls.crt"
+    key_file: "/etc/skytree/tls/broker/tls.key"
+    ca_file: "/etc/skytree/tls/broker/ca.crt"
+    reload_interval: "5m"
+    mtls_auth_mode: "optional"
+  keep_alive_seconds: 180
+  keep_alive_scan_interval: "10s"
+  read_batch_size: 200
+  persist_qos0: true
+  no_sub_topic_behavior: 0
+  connack:
+    receive_maximum: 65535
+    max_qos: 2
+    retain_available: 1
+    maximum_packet_size: 1048576
+    topic_alias_maximum: 10
+    wildcard_subscription_available: true
+    subscription_identifier_available: true
+    shared_subscription_available: true
+    server_keep_alive: 180
+  client_rate:
+    enabled: true
+    messages_per_second: 100
+    window_size: 10
+  message_retry:
+    max_retry_count: 3
+    interval: "30s"
+    max_timeout: "300s"
+    scheduler_interval: "1s"
+
+storage:
+  driver: "badger"
+  message_expire_days: 1
+  delivery_queue:
+    driver: "scylla"
+  payload:
+    driver: "scylla"
+  badger:
+    path: "/var/lib/skytree/badger"
+  cassandra:
+    hosts: ["scylla.default.svc.cluster.local"]
+    port: 9042
+    keyspace: "skytree"
+    username: ""
+    password: ""
+    consistency: "LOCAL_QUORUM"
+    timeout: "3s"
+    connect_timeout: "3s"
+    num_conns: 8
+    auto_create_table: false
+
+delivery:
+  wake_max_wait: "3m"
+  wake_read_retry_max_attempts: 6
+  wake_read_retry_backoff_initial: "50ms"
+  wake_read_retry_backoff_max: "1s"
+  inflight_wait_tick: "1s"
+
+cluster:
+  enable: true
+  join: false
+  data_dir: "/var/lib/skytree/raft"
+  local_node_address: "${NODE_NAME}:8080"
+  local_node_id: 1
+  write_timeout: "5s"
+  member:
+    1: "skytree-0.skytree-headless.skytree-beta.svc.cluster.local:8080"
+    2: "skytree-1.skytree-headless.skytree-beta.svc.cluster.local:8080"
+    3: "skytree-2.skytree-headless.skytree-beta.svc.cluster.local:8080"
+  grpc:
+    addr: "0.0.0.0:8091"
+    endpoint: "${NODE_NAME}:8091"
+    allow_insecure: false
+    tls:
+      enabled: true
+      cert_file: "/etc/skytree/tls/grpc/tls.crt"
+      key_file: "/etc/skytree/tls/grpc/tls.key"
+      ca_file: "/etc/skytree/tls/grpc/ca.crt"
+      reload_interval: "5m"
+      mtls_auth_mode: "required"
+  health_check:
+    enabled: true
+    interval: "30s"
+    timeout: "5s"
+    max_retries: 3
+
+logging:
+  level: "info"
+  file: ""
+  max_size: 100
+  max_age: 30
+  max_backups: 10
+  compress: true
+  gin_mode: "release"
+  gin_console_output: false
+  startup_report: false
+
+plugins:
+  metric:
+    enabled: true
+  auth:
+    enabled: true
+  acl:
+    enabled: true
+    file: "/etc/skytree/acl/rules.yaml"
+    keystore_key: "acl:rules"
+    default_deny: true
+    reload_interval: "0s"
+    admin_username: ""
+    admin_password: ""
+  custom: []

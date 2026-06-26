@@ -1,0 +1,52 @@
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+log/
+logs/
+*.log
+
+# Runtime / data
+data/
+data_*/
+internal/app/*_center/
+nutsdb_data/
+snapshot/
+.run/
+run/skytree-local
+run/*.bin
+private/
+
+# Build output
+build/bin/
+build/data/
+build/data_*/
+build/logs/
+*.exe
+*.out
+*.test
+dist/
+# Compiled main binary in repo root (use `go build -o build/bin/`)
+/main
+# Docker build context cache
+.docker-build/
+
+# Go coverage / profiling
+coverage.out
+coverage.html
+*.prof
+
+# Dependencies
+vendor/
+node_modules/
+
+# Editor / debug temp files
+parse_err.txt
+*.go.[0-9]*

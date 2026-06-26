@@ -1,0 +1,196 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: questdb-config
+  namespace: default
+data:
+  server.conf: |
+    # QuestDB 服务器配置
+    http.enabled=true
+    http.bind.to=0.0.0.0:9000
+    http.net.active.connection.limit=256
+    http.net.connection.timeout=300000
+    http.net.connection.string.pool.capacity=64
+    
+    # PostgreSQL 协议配置
+    pg.enabled=true
+    pg.bind.to=0.0.0.0:8812
+    pg.net.active.connection.limit=256
+    pg.net.connection.timeout=300000
+    
+    # InfluxDB 协议配置
+    influxdb.enabled=true
+    influxdb.bind.to=0.0.0.0:9009
+    influxdb.net.active.connection.limit=256
+    influxdb.net.connection.timeout=300000
+    
+    # 性能配置
+    shared.worker.count=4
+    shared.worker.affinity=on
+    shared.worker.haltOnError=false
+    
+    # 内存配置
+    shared.worker.haltOnError=false
+    cairo.max.uncommitted.rows=500000
+    cairo.commit.lag=240000
+    cairo.max.lag=300000
+    
+    # 存储配置
+    cairo.default.partition.by=DAY
+    cairo.max.file.size=2GB
+    cairo.rollover.row.count=1000000
+    
+    # 网络配置
+    http.net.connection.string.pool.capacity=64
+    http.net.connection.timeout=300000
+    http.net.active.connection.limit=256
+    
+    # 日志配置
+    log.level=INFO
+    log.record.queue.capacity=1024
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: questdb-service
+  namespace: default
+  labels:
+    app: questdb
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9000
+    targetPort: 9000
+    protocol: TCP
+    name: http
+  - port: 8812
+    targetPort: 8812
+    protocol: TCP
+    name: postgres
+  - port: 9009
+    targetPort: 9009
+    protocol: TCP
+    name: influxdb
+  selector:
+    app: questdb
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: questdb
+  namespace: default
+  labels:
+    app: questdb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: questdb
+  template:
+    metadata:
+      labels:
+        app: questdb
+    spec:
+      containers:
+      - name: questdb
+        image: questdb/questdb:7.3.4
+        ports:
+        - containerPort: 9000
+          name: http
+        - containerPort: 8812
+          name: postgres
+        - containerPort: 9009
+          name: influxdb
+        env:
+        - name: QDB_HTTP_ENABLED
+          value: "true"
+        - name: QDB_PG_ENABLED
+          value: "true"
+        - name: QDB_INFLUXDB_ENABLED
+          value: "true"
+        - name: QDB_SHARED_WORKER_COUNT
+          value: "4"
+        - name: QDB_CAIRO_MAX_UNCOMMITTED_ROWS
+          value: "500000"
+        - name: QDB_CAIRO_COMMIT_LAG
+          value: "240000"
+        - name: QDB_CAIRO_MAX_LAG
+          value: "300000"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /var/lib/questdb/conf/server.conf
+          subPath: server.conf
+        - name: data-volume
+          mountPath: /var/lib/questdb/db
+        - name: log-volume
+          mountPath: /var/lib/questdb/log
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /status
+            port: 9000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /status
+            port: 9000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: config-volume
+        configMap:
+          name: questdb-config
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: questdb-data-pvc
+      - name: log-volume
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: questdb-data-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: questdb-headless
+  namespace: default
+  labels:
+    app: questdb
+spec:
+  clusterIP: None
+  ports:
+  - port: 9000
+    targetPort: 9000
+    protocol: TCP
+    name: http
+  - port: 8812
+    targetPort: 8812
+    protocol: TCP
+    name: postgres
+  - port: 9009
+    targetPort: 9009
+    protocol: TCP
+    name: influxdb
+  selector:
+    app: questdb

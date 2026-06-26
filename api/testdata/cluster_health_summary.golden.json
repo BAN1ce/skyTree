@@ -1,0 +1,31 @@
+{
+  "data": {
+    "clusters": [
+      {
+        "cluster_id": 2,
+        "cluster_name": "key_store",
+        "failure_count": 0,
+        "last_check": "\u003ctime\u003e",
+        "last_success": "\u003ctime\u003e",
+        "latency_ms": 0,
+        "status": "healthy"
+      },
+      {
+        "cluster_id": 4,
+        "cluster_name": "will_delay",
+        "error": "timeout",
+        "failure_count": 3,
+        "last_check": "\u003ctime\u003e",
+        "last_success": "\u003ctime\u003e",
+        "latency_ms": 0,
+        "status": "unhealthy"
+      }
+    ],
+    "healthy": 1,
+    "timestamp": "\u003ctime\u003e",
+    "total": 2,
+    "unhealthy": 1,
+    "unknown": 0
+  },
+  "success": true
+}

@@ -1,0 +1,98 @@
+# Headless Service for StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: skytree-headless
+  namespace: default
+  labels:
+    app: skytree
+spec:
+  clusterIP: None
+  ports:
+  - port: 1883
+    name: mqtt-tcp
+    protocol: TCP
+  - port: 8080
+    name: mqtt-ws
+    protocol: TCP
+  - port: 8081
+    name: mqtt-wss
+    protocol: TCP
+  - port: 9526
+    name: http-api
+    protocol: TCP
+  - port: 8091
+    name: grpc
+    protocol: TCP
+  selector:
+    app: skytree
+
+---
+# LoadBalancer Service for external access
+apiVersion: v1
+kind: Service
+metadata:
+  name: skytree-service
+  namespace: default
+  labels:
+    app: skytree
+  annotations:
+    service.beta.kubernetes.io/alicloud-loadbalancer-spec: "slb.s1.small"
+    service.beta.kubernetes.io/alicloud-loadbalancer-address-type: "internet"
+    service.beta.kubernetes.io/alicloud-loadbalancer-force-override-listeners: "true"
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 1883
+    targetPort: 1883
+    name: mqtt-tcp
+    protocol: TCP
+  - port: 8080
+    targetPort: 8080
+    name: mqtt-ws
+    protocol: TCP
+  - port: 8081
+    targetPort: 8081
+    name: mqtt-wss
+    protocol: TCP
+  - port: 9526
+    targetPort: 9526
+    name: http-api
+    protocol: TCP
+  selector:
+    app: skytree
+
+---
+# NodePort Service for development/testing
+apiVersion: v1
+kind: Service
+metadata:
+  name: skytree-nodeport
+  namespace: default
+  labels:
+    app: skytree
+spec:
+  type: NodePort
+  ports:
+  - port: 1883
+    targetPort: 1883
+    nodePort: 30183
+    name: mqtt-tcp
+    protocol: TCP
+  - port: 8080
+    targetPort: 8080
+    nodePort: 30080
+    name: mqtt-ws
+    protocol: TCP
+  - port: 8081
+    targetPort: 8081
+    nodePort: 30081
+    name: mqtt-wss
+    protocol: TCP
+  - port: 9526
+    targetPort: 9526
+    nodePort: 30526
+    name: http-api
+    protocol: TCP
+  selector:
+    app: skytree

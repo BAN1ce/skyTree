@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package event;
+option go_package = "./;proto_event";
+
+
+
+message NodeListenCount{
+  int64 Total = 1;
+  int64 Once = 2;
+}
+
+message Nodes{
+  map<uint64, NodeListenCount> Nodes = 1;
+}
+
+
+message StateMachine {
+  map<string, Nodes> EventsNodeListener = 1;
+}

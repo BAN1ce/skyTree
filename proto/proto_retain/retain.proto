@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package proto;
+option go_package = "./;proto_retain";
+
+
+
+
+message RetainMessage{
+  string Topic = 1;
+  bytes Payload = 2;
+  int32 Qos = 3;
+  bytes PublishPacket = 4;
+  int64 CreatedAtUnixNano = 5;
+  string PublisherClientID = 6;
+  int64 ExpiredAtUnixNano = 7;
+}

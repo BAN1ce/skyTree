@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package nodepb;
+option go_package = "github.com/BAN1ce/skyTree/pkg/brokerapi/grpc/nodepb;nodepb";
+
+import "google/protobuf/empty.proto";
+
+// ClientDeliveryNotify is the node-to-node notification service for client delivery events.
+//
+service ClientDeliveryNotify {
+  rpc Notify (ClientDeliveryNotifyRequest) returns (google.protobuf.Empty);
+}
+
+enum ClientDeliveryNotifyKind {
+  CLIENT_DELIVERY_NOTIFY_KIND_UNSPECIFIED = 0;
+  // Wake tells the target node to wake the client delivery runner and re-check store (with backoff).
+  CLIENT_DELIVERY_NOTIFY_KIND_WAKE = 1;
+  // Qos0Direct carries an encoded broker publish message for direct QoS0 delivery without persistence.
+  CLIENT_DELIVERY_NOTIFY_KIND_QOS0_DIRECT = 2;
+  // SharedWake tells the target node to wake the shared subscription consumer for a share group.
+  CLIENT_DELIVERY_NOTIFY_KIND_SHARED_WAKE = 3;
+}
+
+// ClientDeliveryOptions contains MQTT5 subscription options for a specific client.
+message ClientDeliveryOptions {
+  // NoLocal: if true, do not deliver to the same client that published the message (MQTT5).
+  bool NoLocal = 1;
+  // RAP (Retain As Published): if false, force retain=0 for this delivery (MQTT5).
+  bool RAP = 2;
+  // SubscriptionIDsJSON: JSON array of subscription identifiers for matched subscriptions (MQTT5).
+  string SubscriptionIDsJSON = 3;
+}
+
+message ClientDeliveryNotifyRequest {
+  // TargetNodeID is used for metrics/observability. Delivery is ensured by point-to-point dialing.
+  uint64 TargetNodeID = 1;
+  // ClientIDs are the target online clients on the node. Empty when Kind == SHARED_WAKE.
+  repeated string ClientIDs = 2;
+  // Kind defines how the client runner should react.
+  ClientDeliveryNotifyKind Kind = 3;
+  // Payload is optional. For QOS0_DIRECT it is bytes of proto_event.Request (Data=serializer(publish.Message)).
+  // For SHARED_WAKE it is JSON bytes of SharedWakePayload.
+  bytes Payload = 4;
+  // PublishTopic is optional, used for logs/metrics correlation.
+  string PublishTopic = 5;
+  // ClientOptions maps clientID to MQTT5 subscription options (NoLocal, RAP). Only used when Kind == QOS0_DIRECT.
+  map<string, ClientDeliveryOptions> ClientOptions = 6;
+}
+

@@ -1,0 +1,123 @@
+# SkyTree 大规模压测配置（历史 fixture）
+# 针对100万客户端和200万topic优化
+
+# 服务器配置
+server:
+  port: 9526
+
+# MQTT 代理配置 - 大规模优化
+broker:
+  listeners:
+    - "tcp://0.0.0.0:1883"
+    - "tcp://0.0.0.0:1884"  # 多端口负载均衡
+    - "tcp://0.0.0.0:1885"
+    - "ws://0.0.0.0:8083"
+  keep_alive_seconds: 300                    # 增加保活时间
+  read_batch_size: 1000              # 增加批量读取大小
+  persist_qos0: false                  # 大规模场景下不存储QoS0消息
+  no_sub_topic_behavior: 0
+  
+  # 客户端限流配置 - 大规模场景优化
+  client_rate:
+    enabled: true
+    messages_per_second: 100         # 提高单客户端消息限制
+    window_size: 5                   # 减小窗口大小提高响应性
+  
+  # 连接确认属性 - 大规模优化
+  connack:
+    receive_maximum: 65535           # 最大接收值
+    max_qos: 2
+    retain_available: 1
+    maximum_packet_size: 1048576     # 1MB最大包大小
+    topic_alias_maximum: 100         # 增加主题别名支持
+    wildcard_subscription_available: true
+    subscription_identifier_available: true
+    shared_subscription_available: true
+    server_keep_alive: 300
+    response_information: ""
+    server_reference: ""
+  
+  # 消息重试配置
+  message_retry:
+    max_retry_count: 3
+    interval: "10s"                  # 减少重试间隔
+    max_timeout: "60s"               # 减少最大超时时间
+    scheduler_interval: "100ms"      # 调度器 tick 间隔
+
+# 存储配置 - 大规模场景优化
+storage:
+  driver: "badger"
+  message_expire_days: 24                # 消息保存24小时
+
+  # Client-centric delivery pipeline store selection.
+  delivery_queue:
+    driver: "scylla"
+  payload:
+    driver: "scylla"
+  cassandra:
+    hosts: ["127.0.0.1"]
+    port: 9042
+    keyspace: "skytree"
+    auto_create_table: true
+
+# 集群配置 - 大规模部署
+cluster:
+  enable: true
+  join: false
+  data_dir: "./data/raft_large_scale"
+  local_node_address: "127.0.0.1:8080"
+  local_node_id: 1
+  write_timeout: "10s"               # 增加写入超时
+  
+  # 集群成员配置
+  member:
+    1: "127.0.0.1:8080"
+    2: "127.0.0.1:8081"
+    3: "127.0.0.1:8082"
+    4: "127.0.0.1:8083"
+    5: "127.0.0.1:8084"
+  
+  # gRPC 配置
+  grpc:
+    addr: "0.0.0.0:8091"
+    # reachable address (advertise) used by other nodes to dial this node
+    endpoint: "127.0.0.1:8091"
+    allow_insecure: true
+  
+  # 健康检查配置
+  health_check:
+    enabled: true
+    interval: 10s                    # 减少检查间隔
+    timeout: 3s
+    max_retries: 5
+
+# Delivery runner settings for large-scale deployments.
+# Prefer event-driven wake to avoid per-client polling load on DB.
+delivery:
+  wake_max_wait: 3m
+  wake_read_retry_max_attempts: 6
+  wake_read_retry_backoff_initial: 50ms
+  wake_read_retry_backoff_max: 1s
+  inflight_wait_tick: 2s
+
+# 日志配置 - 大规模场景优化
+logging:
+  level: "warn"                      # 减少日志级别
+  file: "./logs/skyTree_large_scale.log"
+  max_size: 500                      # 增加日志文件大小
+  max_age: 7                         # 减少日志保存天数
+  max_backups: 5
+  compress: true
+
+# 插件配置
+plugins:
+  # 监控插件配置
+  metric:
+    enabled: true
+  
+  # 认证插件配置 - 大规模场景建议禁用
+  auth:
+    enabled: false
+  
+  # 自定义插件配置
+  custom: []

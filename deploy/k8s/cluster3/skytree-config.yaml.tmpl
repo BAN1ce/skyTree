@@ -1,0 +1,61 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: skytree-config
+  namespace: ${NAMESPACE}
+  labels:
+    app: skytree
+data:
+  config.yaml: |
+    # K8s config for a SkyTree 3-node cluster.
+    server:
+      port: 9526
+
+    broker:
+      listeners:
+        - tcp://0.0.0.0:1883
+        - ws://0.0.0.0:8080
+        - wss://0.0.0.0:8081
+      message_retry:
+        scheduler_interval: 1s
+      no_sub_topic_behavior: 0
+      keep_alive_seconds: 180
+      read_batch_size: 200
+      persist_qos0: true
+      client_rate:
+        enabled: true
+        messages_per_second: 10
+        window_size: 10
+
+    logging:
+      level: info
+
+    storage:
+      driver: badger
+      message_expire_days: 1
+      badger:
+        path: "/app/data/badger"
+
+    cluster:
+      enable: true
+      join: false
+      data_dir: "/app/data/raft"
+      # Use a dedicated Raft port to avoid conflicts with broker WS (8080).
+      local_node_address: "0.0.0.0:63001"
+      # local_node_id is overridden by env CLUSTER_LOCAL_NODE_ID in StatefulSet.
+      local_node_id: 1
+      write_timeout: 5s
+      member:
+        1: "skytree-0.skytree-headless.${NAMESPACE}.svc.cluster.local:63001"
+        2: "skytree-1.skytree-headless.${NAMESPACE}.svc.cluster.local:63001"
+        3: "skytree-2.skytree-headless.${NAMESPACE}.svc.cluster.local:63001"
+      grpc:
+        addr: "0.0.0.0:8091"
+        endpoint: "${HOSTNAME}.skytree-headless.${NAMESPACE}.svc.cluster.local:8091"
+      health_check:
+        enabled: true
+        interval: 30s
+        timeout: 5s
+        max_retries: 3
+
+

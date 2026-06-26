@@ -1,0 +1,190 @@
+# SkyTree 配置示例文件
+# 这是一个完整的配置字段说明书，展示所有可用配置项及解释。
+# 如果你只想本地快速启动，请优先使用精简版 etc/config.yaml。
+# 其他场景示例请看：
+# - etc/examples/config.beta.example.yaml
+# - etc/examples/config.cluster.example.yaml
+# - etc/examples/config.stress.example.yaml
+
+# 服务器配置
+server:
+  port: 9526                    # API 服务端口
+  tls:
+    enabled: false              # 是否启用 HTTPS（API）
+    cert_file: ""               # 服务端证书（PEM）
+    key_file: ""                # 服务端私钥（PEM）
+    ca_file: ""                 # 可选 CA
+    reload_interval: "0s"       # 证书热加载间隔（>0 启用）
+
+# Console 管理台配置
+console:
+  enabled: false                # 是否启用只读 Web Console（/console）
+  username: ""                  # Console Basic Auth 用户名；可用 CONSOLE_USERNAME 覆盖
+  password: ""                  # Console Basic Auth 密码；可用 CONSOLE_PASSWORD 覆盖
+
+# MQTT 代理配置
+broker:
+  listeners:                       # 监听地址列表
+    - "tcp://localhost:1883"    # TCP 监听
+    - "tls://localhost:8883"    # MQTT over TLS (mqtts)
+  # Local single-node persistence for broker state centers.
+  local_state:
+    data_dir: "./data/single"
+    snapshot_interval: "30s"
+    snapshot_entries: 10000
+  tls:
+    enabled: true               # 是否启用 TLS（用于 tls://）
+    cert_file: "./certs/server.crt"  # 服务端证书（PEM）
+    key_file: "./certs/server.key"   # 服务端私钥（PEM）
+    ca_file: ""                 # 可选 CA（预留给 mTLS/链校验）
+    reload_interval: "0s"       # 证书热加载间隔（>0 启用）
+  keep_alive_seconds: 180               # 保活时间（秒）
+  read_batch_size: 200          # 批量读取大小
+  persist_qos0: true              # 是否存储 QoS 0 消息
+  no_sub_topic_behavior: 0      # 无订阅响应码
+  
+  # 客户端限流配置
+  client_rate:
+    enabled: true                    # 是否启用客户端限流
+    messages_per_second: 10          # 每秒最多接收的消息数
+    window_size: 10                  # 限流窗口大小（秒）
+  
+  # 连接确认属性
+  connack:
+    receive_maximum: 65535                     # 接收最大值
+    max_qos: 2                                 # 最大 QoS 等级
+    retain_available: 1                        # 保留消息可用性
+    maximum_packet_size: 1048576               # 最大包大小
+    topic_alias_maximum: 10                    # 主题别名最大值
+    wildcard_subscription_available: true      # 通配符订阅可用性
+    subscription_identifier_available: true    # 订阅标识符可用性
+    shared_subscription_available: true        # 共享订阅可用性
+    server_keep_alive: 180                     # 服务器保活时间
+    response_information: ""                   # 响应信息
+    server_reference: ""                       # 服务器引用
+  
+  # 消息重试配置
+  message_retry:
+    max_retry_count: 3          # 最大重试次数
+    interval: "30s"             # 重试间隔
+    max_timeout: "300s"         # 最大超时时间
+    scheduler_interval: "1s"    # 调度器 tick 间隔
+
+# 存储配置
+storage:
+  driver: "redis"              # 默认存储类型：redis, badger
+  message_expire_days: 1            # 消息过期时间（天）
+
+  # Client-centric delivery pipeline store selection.
+  # - delivery_queue: metadata plane (tasks/cursor)
+  # - payload: data plane (message bytes)
+  # Both drivers are required and must be the same value.
+  delivery_queue:
+    driver: "single_node_badger" # "single_node_badger" (single node) or "scylla" (external CQL cluster)
+  payload:
+    # payload type options: single_node_badger, scylla
+    driver: "single_node_badger"
+  
+  # Redis 配置
+  redis:
+    address: "localhost:6379"   # Redis 地址
+    password: ""                # Redis 密码
+    db: 0                       # Redis 数据库
+  
+  # Badger 配置
+  badger:
+    path: "./data/badger"       # Badger 数据路径
+  
+  # Cassandra/Scylla CQL config (required when queue/payload.type=scylla)
+  cassandra:
+    hosts: ["127.0.0.1"]
+    port: 9042
+    keyspace: "skytree"
+    username: ""
+    password: ""
+    consistency: "LOCAL_QUORUM"
+    timeout: "3s"
+    connect_timeout: "3s"
+    num_conns: 2
+    auto_create_table: true
+
+# Delivery runner configuration (client-centric delivery pipeline)
+# Prefer event-driven wake to avoid per-client polling load on DB.
+delivery:
+  wake_max_wait: "3m"                       # fallback probe interval when wake is missing
+  wake_read_retry_max_attempts: 6           # retries only after wake-triggered ReadTasks fails
+  wake_read_retry_backoff_initial: "50ms"   # initial backoff
+  wake_read_retry_backoff_max: "1s"         # max backoff
+  inflight_wait_tick: "1s"                  # safety tick while QoS1/QoS2 inflight exists
+
+# 集群配置
+cluster:
+  enable: false                 # 是否启用集群模式
+  join: false                   # 是否加入现有集群
+  data_dir: "./data/cluster"    # 集群数据目录
+  local_node_address: "localhost:63001"  # 本地节点地址
+  local_node_id: 1              # 本地节点 ID
+  write_timeout: "5s"           # 写入超时时间
+  
+  # 集群成员配置
+  member:
+    1: "localhost:63001"        # 节点 1 地址
+    2: "localhost:63002"        # 节点 2 地址
+    3: "localhost:63003"        # 节点 3 地址
+  
+  # gRPC 配置
+  grpc:
+    addr: "0.0.0.0:53001"       # gRPC 监听地址
+    endpoint: "127.0.0.1:53001" # gRPC 端点
+    allow_insecure: false       # 默认关闭明文；仅开发环境可显式设 true
+    tls:
+      enabled: false            # 是否启用 gRPC TLS
+      cert_file: ""             # 服务端证书（PEM）
+      key_file: ""              # 服务端私钥（PEM）
+      ca_file: ""               # 可选 CA
+      reload_interval: "0s"     # 证书热加载间隔（>0 启用）
+
+# 日志配置
+logging:
+  level: "info"                 # 日志级别：debug, info, warn, error
+  file: "./logs/skyTree.log"    # 日志文件路径，空字符串表示控制台输出
+  max_size: 100                 # 日志文件最大大小（MB）
+  max_age: 30                   # 日志文件最大保存天数
+  max_backups: 10               # 最大备份文件数
+  compress: true                # 是否压缩备份文件
+  gin_mode: "release"           # Gin 运行模式：release, debug, test
+  gin_console_output: false     # 是否允许 Gin 输出默认控制台日志
+  startup_report: true          # 是否打印启动摘要和欢迎信息
+
+# 插件配置
+plugins:
+  # 监控插件配置
+  metric:
+    enabled: true               # 是否启用监控插件，默认启用
+  
+  # 认证插件配置
+  auth:
+    enabled: false              # 是否启用认证插件，默认禁用
+
+  # ACL 插件配置
+  acl:
+    enabled: false              # 是否启用 ACL
+    file: ""                    # ACL 规则文件路径；存在则优先使用（不读 keystore）
+    keystore_key: "acl:rules"   # ACL 规则在 keystore 中的 key（Badger/Redis 等）
+    default_deny: true          # 默认拒绝（更安全）
+    reload_interval: "0s"       # 规则热加载间隔（>0 启用；后续实现）
+    admin_username: ""          # ACL 管理 API Basic Auth 用户名（空=禁用管理路由）
+    admin_password: ""          # ACL 管理 API Basic Auth 密码（空=禁用管理路由）
+  
+  # 自定义插件配置
+  custom:
+    - name: "custom_plugin_1"   # 插件名称
+      enabled: false            # 是否启用
+      config:                   # 插件特定配置
+        param1: "value1"
+        param2: 123
+    - name: "custom_plugin_2"
+      enabled: false
+      config:
+        timeout: "30s"
+        retries: 3 

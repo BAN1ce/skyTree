@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package dbpb;
+option go_package = "github.com/BAN1ce/skyTree/pkg/cluster/dbpb;dbpb";
+
+
+enum DB_REQUEST_TYPE{
+  Z_ADD = 0;
+  Z_DELETE = 1;
+  Z_RANGE = 2;
+  Z_RANGE_BY_SCORE = 3;
+
+  PUT = 110;
+  GET = 111;
+  DELETE = 112;
+  GET_PREFIX = 113;
+  DELETE_PREFIX = 114;
+  INCR = 115;
+  DECR = 116;
+
+
+  HSET = 220;
+  HGET = 221;
+  HDEL = 222;
+  HGET_ALL = 223;
+  HGET_PREFIX = 224;
+  DELETE_HASH = 225;
+  EXPIRE = 226;
+
+}
+
+message Request{
+  string ID = 1;
+  DB_REQUEST_TYPE Type = 2;
+  repeated bytes  CMD = 3;
+  string Bucket = 4;
+  int64 ttl_nanos = 5;
+}
+
+
+message Response{
+  string ID = 1;
+  DB_REQUEST_TYPE Type = 2;
+  bool Success = 3;
+  repeated bytes  result = 4;
+  bool Exist = 5;
+}

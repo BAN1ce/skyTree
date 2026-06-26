@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package nodepb;
+option go_package = "github.com/BAN1ce/skyTree/pkg/brokerapi/grpc/nodepb;nodepb";
+
+
+service ClientCenter {
+  rpc CloseClient (CloseClientRequest) returns (CloseClientResponse);
+}
+
+
+message CloseClientRequest{
+  string ClientID = 1;
+  uint64 NodeID = 2;
+  bool SessionClean = 3;
+  // OwnerToken is a fencing token (UUID string). The server must only close the client
+  // if the current active connection's token matches this value.
+  string OwnerToken = 4;
+}
+
+message CloseClientResponse{
+  bool Success = 1;
+  string Message = 2;
+}

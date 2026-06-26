@@ -1,0 +1,15 @@
+# Runtime image for the locally compiled SkyTree broker in local K8s.
+# This image intentionally uses scratch so local K8s startup does not need to pull a base image.
+FROM scratch
+
+COPY --chown=1001:1001 .docker-build/skytree /app/skytree
+COPY --chown=1001:1001 web/console/dist /app/web/console/dist
+COPY --chown=1001:1001 etc/config.yaml /app/config.yaml
+
+WORKDIR /app
+
+USER 1001:1001
+
+EXPOSE 1883 8080 8081 9526 63001 8091
+
+ENTRYPOINT ["/app/skytree", "-config", "/app/config.yaml"]

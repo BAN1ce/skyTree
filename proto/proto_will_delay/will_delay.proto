@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package proto_will_delay;
+
+option go_package = "github.com/BAN1ce/skyTree/proto/proto_will_delay";
+
+// WillDelayTask describes a scheduled will-delay task.
+message WillDelayTask {
+  // ClientID is the MQTT client identifier.
+  string ClientID = 1 [json_name = "client_id"];
+  // ScheduledPublishTime is the planned publish time in Unix microseconds.
+  int64 ScheduledPublishTime = 2 [json_name = "scheduled_publish_time"];
+  // OwnerToken fences stale tasks from previous connections.
+  string OwnerToken = 3 [json_name = "owner_token"];
+}
+
+// WillDelayState stores all pending tasks for snapshot persistence.
+message WillDelayState {
+  // Tasks maps task keys to pending tasks.
+  map<string, WillDelayTask> Tasks = 1 [json_name = "tasks"];
+}
+
+// WillDelayRequestType identifies the operation carried by WillDelayRequest.
+enum WillDelayRequestType {
+  ADD_TASK = 0;
+  DELETE_TASK = 1;
+  GET_DUE_TASKS = 2;
+}
+
+// WillDelayRequest is the state-machine request envelope.
+message WillDelayRequest {
+  WillDelayRequestType Type = 1 [json_name = "type"];
+  // Task is used when adding a will-delay task.
+  optional WillDelayTask Task = 2 [json_name = "task"];
+  // ClientID is used when deleting tasks for a client.
+  optional string ClientID = 3 [json_name = "client_id"];
+  // CurrentTime is used when querying due tasks, in Unix microseconds.
+  optional int64 CurrentTime = 4 [json_name = "current_time"];
+}
+
+// WillDelayResponse is returned by will-delay state-machine lookups.
+message WillDelayResponse {
+  // DueClientIDs contains client IDs whose tasks are due.
+  repeated string DueClientIDs = 1 [json_name = "due_client_ids"];
+  // Success indicates whether the lookup succeeded.
+  bool Success = 2 [json_name = "success"];
+  // DueTasks contains tasks whose scheduled publish time is at or before current_time.
+  repeated WillDelayTask DueTasks = 3 [json_name = "due_tasks"];
+}

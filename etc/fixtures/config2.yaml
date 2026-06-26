@@ -1,0 +1,54 @@
+broker:
+  listeners:
+    - tcp://localhost:1884
+  message_retry:
+    scheduler_interval: 1s
+  no_sub_topic_behavior: 0
+logging:
+  level: debug
+#  level: warn
+delivery:
+  wake_max_wait: 3m
+  wake_read_retry_max_attempts: 6
+  wake_read_retry_backoff_initial: 50ms
+  wake_read_retry_backoff_max: 1s
+  inflight_wait_tick: 1s
+storage:
+  driver: redis
+  message_expire_days: 6000
+  delivery_queue:
+    driver: "scylla"
+  payload:
+    driver: "scylla"
+  cassandra:
+    hosts: ["127.0.0.1"]
+    port: 9042
+    keyspace: "skytree"
+    auto_create_table: true
+  redis:
+    address: localhost:6379
+    connect_timeout: 1s
+    db: 0
+    idle_timeout: 60s
+    max_active: 100
+    max_idle: 10
+    password: ''
+    read_timeout: 1s
+    write_timeout: 1s
+  badger:
+    path: "./data/badger"
+server:
+  port: 9527
+
+cluster:
+  enable: true
+  data_dir: "./data/raft"
+  local_node_address: "127.0.0.1:8081"
+  local_node_id: 2
+  member:
+    1: "127.0.0.1:8080"
+    2: "127.0.0.1:8081"
+  write_timeout: 5s
+  grpc:
+    addr: "0.0.0.0:53002"
+    allow_insecure: true

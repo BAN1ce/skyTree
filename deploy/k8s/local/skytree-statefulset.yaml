@@ -1,0 +1,120 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: skytree
+  namespace: skytree-local
+spec:
+  serviceName: skytree-headless
+  podManagementPolicy: Parallel
+  replicas: 3
+  selector:
+    matchLabels:
+      app: skytree
+  template:
+    metadata:
+      labels:
+        app: skytree
+    spec:
+      serviceAccountName: skytree-console
+      securityContext:
+        fsGroup: 1001
+      initContainers:
+        - name: wait-scylla
+          image: scylladb/scylla:5.4
+          command:
+            - /bin/bash
+            - -ec
+            - |
+              until cqlsh scylla 9042 -e 'DESCRIBE KEYSPACE skytree' >/dev/null 2>&1; do
+                sleep 2
+              done
+      containers:
+        - name: skytree
+          image: skytree:cluster-local
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SKYTREE_K8S_AUTO_NODE_ID
+              value: "true"
+            - name: SKYTREE_K8S_HEADLESS_SERVICE
+              value: skytree-headless
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: HTTP_PROXY
+              value: ""
+            - name: HTTPS_PROXY
+              value: ""
+            - name: ALL_PROXY
+              value: ""
+            - name: http_proxy
+              value: ""
+            - name: https_proxy
+              value: ""
+            - name: all_proxy
+              value: ""
+            - name: NO_PROXY
+              value: "localhost,127.0.0.1,scylla,skytree,skytree-mqtt,skytree-api,skytree-headless,.svc,.cluster.local"
+            - name: no_proxy
+              value: "localhost,127.0.0.1,scylla,skytree,skytree-mqtt,skytree-api,skytree-headless,.svc,.cluster.local"
+          ports:
+            - name: mqtt
+              containerPort: 1883
+            - name: raft
+              containerPort: 8080
+            - name: http
+              containerPort: 9526
+            - name: grpc
+              containerPort: 8091
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: data
+              mountPath: /app/data
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              memory: 2Gi
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health/startup
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
+      volumes:
+        - name: config
+          configMap:
+            name: skytree-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 20Gi

@@ -1,0 +1,37 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: eg
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: skytree-gateway
+  namespace: skytree-local
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: mqtt
+      protocol: TCP
+      port: 1883
+      allowedRoutes:
+        namespaces:
+          from: Same
+        kinds:
+          - kind: TCPRoute
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TCPRoute
+metadata:
+  name: skytree-mqtt
+  namespace: skytree-local
+spec:
+  parentRefs:
+    - name: skytree-gateway
+      sectionName: mqtt
+  rules:
+    - backendRefs:
+        - name: skytree-mqtt
+          port: 1883

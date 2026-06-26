@@ -1,0 +1,177 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: skytree-headless
+  namespace: ${NAMESPACE}
+  labels:
+    app: skytree
+spec:
+  clusterIP: None
+  ports:
+  - port: 1883
+    name: mqtt-tcp
+    protocol: TCP
+  - port: 8080
+    name: mqtt-ws
+    protocol: TCP
+  - port: 8081
+    name: mqtt-wss
+    protocol: TCP
+  - port: 9526
+    name: http-api
+    protocol: TCP
+  - port: 63001
+    name: raft
+    protocol: TCP
+  - port: 8091
+    name: grpc
+    protocol: TCP
+  selector:
+    app: skytree
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: skytree-internal
+  namespace: ${NAMESPACE}
+  labels:
+    app: skytree
+spec:
+  type: ClusterIP
+  ports:
+  - port: 1883
+    targetPort: 1883
+    name: mqtt-tcp
+    protocol: TCP
+  - port: 8080
+    targetPort: 8080
+    name: mqtt-ws
+    protocol: TCP
+  - port: 8081
+    targetPort: 8081
+    name: mqtt-wss
+    protocol: TCP
+  - port: 9526
+    targetPort: 9526
+    name: http-api
+    protocol: TCP
+  selector:
+    app: skytree
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: skytree
+  namespace: ${NAMESPACE}
+  labels:
+    app: skytree
+spec:
+  serviceName: skytree-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: skytree
+  template:
+    metadata:
+      labels:
+        app: skytree
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: skytree
+        image: ${SKYTREE_IMAGE}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 1883
+          name: mqtt-tcp
+          protocol: TCP
+        - containerPort: 8080
+          name: mqtt-ws
+          protocol: TCP
+        - containerPort: 8081
+          name: mqtt-wss
+          protocol: TCP
+        - containerPort: 9526
+          name: http-api
+          protocol: TCP
+        - containerPort: 63001
+          name: raft
+          protocol: TCP
+        - containerPort: 8091
+          name: grpc
+          protocol: TCP
+        env:
+        - name: SKYTREE_CONFIG_FILE
+          value: /app/config.yaml
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        # Derive node ID from StatefulSet ordinal.
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          ordinal="${HOSTNAME##*-}"
+          export CLUSTER_LOCAL_NODE_ID="$((ordinal + 1))"
+          exec /app/skytree -config /app/config.yaml
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: config
+          mountPath: /app/config.yaml
+          subPath: config.yaml
+        - name: data
+          mountPath: /app/data
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9526
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9526
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+      securityContext:
+        fsGroup: 1001
+      volumes:
+      - name: config
+        configMap:
+          name: skytree-config
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: ${SKYTREE_STORAGE_SIZE}
+      storageClassName: ${SKYTREE_STORAGE_CLASS}
+
+
+
+

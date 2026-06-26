@@ -1,0 +1,12 @@
+# SkyTree 默认最小配置。
+# 面向单机开发开箱即跑；更多字段见 config.example.yaml。
+broker:
+  listeners:
+    - tcp://localhost:1883
+storage:
+  delivery_queue:
+    driver: single_node_badger
+  payload:
+    driver: single_node_badger
+  badger:
+    path: ./data/badger

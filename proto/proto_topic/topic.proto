@@ -1,0 +1,247 @@
+syntax = "proto3";
+
+package proto;
+option go_package = "./;proto_topic";
+
+
+
+
+
+message SubOption{
+  int32 QoS = 1;
+  bool RetainAsPublished = 2;
+  string Topic = 3;
+  // MQTT5 subscription options and metadata.
+  bool NoLocal = 4;
+  int32 RetainHandling = 5;
+  // SubscriptionIdentifier is the MQTT5 Subscription Identifier attached to this subscription (SUBSCRIBE property).
+  // 0 means not set.
+  int32 SubscriptionIdentifier = 6;
+}
+
+message TopicClientsID{
+  map<string, SubOption> Clients = 1; // key is clientID
+}
+
+message TopicSubTree{
+  TreeNode TreeRoot = 1;
+}
+
+message TreeNode{
+  string TopicSection = 1; // topic section
+  string Topic = 2; // full topic
+  map<string, SubOption> Client = 3; // sub clients, key is clientID
+  map<string, TreeNode> ChildNode = 4; // child tree
+  map<string, int64> ClusterSub = 5;
+}
+
+message ClientSubTopic{
+  map<string, SubOption> Topics = 1; // key is topic
+}
+message ClientManager{
+  map<string, ClientSubTopic> Clients = 1; // key is clientID
+}
+
+
+message SubCore{
+  TopicSubTree root = 1;
+  ClientManager clients = 2;
+}
+
+
+message ClusterSub{
+  map<string, SubCore> cluster = 1;
+  // ClientOwnerTokens is used for snapshotting the current fencing token for each client.
+  map<string, string> ClientOwnerTokens = 2;
+
+}
+
+
+
+
+// -----------------request and response----------------- //
+
+enum TopicRequestType{
+  Sub = 0;
+  UnSub = 1;
+  DeleteClient = 2;
+  DeleteTopic = 3;
+  // SetClientOwnerToken updates the current ownership fencing token for a client.
+  SetClientOwnerToken = 4;
+}
+
+message UpdateRequest{
+  TopicRequestType Type = 1;
+  bytes Data = 2;
+  string RequestID = 3;
+}
+
+message UpdateResponse{
+  TopicRequestType Type = 1;
+  bytes Data = 2;
+  string RequestID = 3;
+}
+
+// -----------------sub and unsub----------------- //
+
+message SubRequest{
+  repeated SubOption  Topics = 1;
+  string ClientID = 2;
+  // OwnerToken is a fencing token (UUID string) for this client connection.
+  string OwnerToken = 3;
+}
+
+message SubResponse{
+  map<string, int32>  Topics = 1;
+  bool  Success = 2;
+}
+
+//
+
+message UnSubRequest{
+  repeated string  Topics = 1;
+  string ClientID = 2;
+  bool Share = 3;
+  string ShareGroup = 4;
+  // OwnerToken is a fencing token (UUID string) for this client connection.
+  string OwnerToken = 5;
+}
+
+message UnSubResponse{
+  repeated int32 Topics = 1;
+}
+
+
+
+
+// -----------------get all match topics----------------- //
+
+message GetAllMatchTopicsRequest {
+  string topic = 1;
+}
+
+
+message GetAllMatchTopicsResponse {
+  map<string, int32> Topic = 2;
+}
+
+// -----------------get all match topics for wild topic----------------- //
+
+message GetAllMatchTopicsForWildTopicRequest {
+  string topic = 1;
+}
+
+message GetAllMatchTopicsForWildTopicResponse {
+  repeated string topic = 1;
+}
+
+message GetAllSubTopicClientRequest{
+  string Topic = 1;
+}
+
+message GetAllSubTopicClientResponse{
+  map<string, SubOption> Client = 1; // key is clientID
+}
+
+// -----------------get all match clients (V2, keep multi-match per client)----------------- //
+// This API avoids losing information when the same client matches multiple subscriptions.
+
+message GetAllMatchClientV2Request{
+  string Topic = 1;
+}
+
+message MatchedSubscription{
+  // TopicFilter is the subscription filter that matched (may contain wildcards).
+  string TopicFilter = 1;
+  int32 QoS = 2;
+  bool RetainAsPublished = 3;
+  bool NoLocal = 4;
+  int32 RetainHandling = 5;
+  int32 SubscriptionIdentifier = 6;
+}
+
+message ClientMatch{
+  string ClientID = 1;
+  int32 MaxQoS = 2;
+  repeated MatchedSubscription Matched = 3;
+}
+
+message GetAllMatchClientV2Response{
+  repeated ClientMatch Matches = 1;
+}
+
+// -----------------get subscription subtree----------------- //
+
+message GetSubTreeRequest{
+  // Topic is the subtree root topic. When empty, it means the virtual root "/" (show all).
+  string Topic = 1;
+  // MaxDepth limits the returned subtree depth (0 means no children, 1 means one level, etc).
+  // When MaxDepth <= 0, the server will use an internal default.
+  int32 MaxDepth = 2;
+}
+
+message GetSubTreeResponse{
+  TreeNode Root = 1;
+}
+
+
+// -----------------delete client----------------- //
+
+message DeleteClientRequest{
+  string ClientID = 1;
+  repeated string Topic = 2;
+  // OwnerToken is optional. When present, the server will only delete subscriptions
+  // if the stored owner token for this client matches (fencing). When empty, treat as force-delete.
+  string OwnerToken = 3;
+}
+
+// SetClientOwnerTokenRequest sets/overwrites the fencing token for a client.
+message SetClientOwnerTokenRequest{
+  string ClientID = 1;
+  string OwnerToken = 2;
+}
+
+// SetClientOwnerTokenResponse indicates whether the token update succeeded.
+message SetClientOwnerTokenResponse{
+  bool Success = 1;
+}
+
+message DeleteClientResponse{
+  bool Success = 1;
+}
+
+
+// -------------------delete topic----------------- //
+
+message DeleteTopicRequest{
+  string Topic = 1;
+}
+
+message DeleteTopicResponse{
+  bool Success = 1;
+}
+
+// -----------------get client subscriptions----------------- //
+
+message GetClientSubscriptionsRequest{
+  string ClientID = 1;
+}
+
+message GetClientSubscriptionsResponse{
+  map<string, SubOption> Topics = 1; // key is topic filter
+}
+
+// -----------------get share group members----------------- //
+
+message GetShareGroupMembersRequest{
+  string ShareGroup = 1;
+}
+
+message ShareGroupMember{
+  string ClientID = 1;
+  string TopicFilter = 2;
+}
+
+message GetShareGroupMembersResponse{
+  repeated ShareGroupMember Members = 1;
+}
